@@ -917,10 +917,12 @@ func callOpenAIStreamInternal(req *models.OpenAIRequest, cfg *config.Config) (*h
 func isMaxTokensParameterError(errorMessage string) bool {
 	errorLower := strings.ToLower(errorMessage)
 
-	// Check for parameter error indicators
+	// Check for parameter error indicators (various provider formats)
 	hasParamIndicator := strings.Contains(errorLower, "parameter") ||
 		strings.Contains(errorLower, "unsupported") ||
-		strings.Contains(errorLower, "invalid")
+		strings.Contains(errorLower, "invalid") ||
+		strings.Contains(errorLower, "extra_forbidden") ||
+		strings.Contains(errorLower, "not permitted")
 
 	// Check for our specific parameter names
 	hasOurParam := strings.Contains(errorLower, "max_tokens") ||

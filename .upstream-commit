@@ -1,0 +1,5 @@
+# Upstream commit pinned from nielspeter/claude-code-proxy
+# This file tracks the exact upstream version we're based on
+# Update only after tests pass with: ./scripts/update-upstream.sh
+
+2e82b12ed6aaf5112d96175841f5ea72aa630f16

@@ -9,12 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"syscall"
 )
 
-const (
-	pidFile   = "/tmp/claude-code-proxy.pid"
+var (
+	pidFile   = filepath.Join(os.TempDir(), "claude-code-proxy.pid")
 	healthURL = "http://localhost:8082/health"
 )
 
