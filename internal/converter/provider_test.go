@@ -8,11 +8,12 @@ import (
 	"github.com/claude-code-proxy/proxy/pkg/models"
 )
 
-// TestProviderSpecificRequestConversion tests that requests are converted correctly per provider
-// TODO: Implement provider-specific features (reasoning, tool_choice) in v1.1.0
-func TestProviderSpecificRequestConversion(t *testing.T) {
-	t.Skip("Provider-specific features (reasoning, tool_choice) not yet implemented - planned for v1.1.0")
+// boolPtr returns a pointer to a bool value (helper for Stream field)
+func boolPtr(b bool) *bool { return &b }
 
+// TestProviderSpecificRequestConversion tests that requests are converted correctly per provider.
+// Provider-specific features (reasoning, tool_choice) only activate when Stream is true.
+func TestProviderSpecificRequestConversion(t *testing.T) {
 	t.Run("OpenRouter with reasoning model", func(t *testing.T) {
 		cfg := &config.Config{
 			SonnetModel: "anthropic/claude-sonnet-4-5",
@@ -22,6 +23,7 @@ func TestProviderSpecificRequestConversion(t *testing.T) {
 		claudeReq := models.ClaudeRequest{
 			Model:     "claude-sonnet-4-5-20250805",
 			MaxTokens: 1000,
+			Stream:    boolPtr(true),
 			Messages: []models.ClaudeMessage{
 				{Role: "user", Content: "Hello"},
 			},
@@ -59,6 +61,7 @@ func TestProviderSpecificRequestConversion(t *testing.T) {
 		claudeReq := models.ClaudeRequest{
 			Model:     "claude-sonnet-4-5-20250805",
 			MaxTokens: 1000,
+			Stream:    boolPtr(true),
 			Messages: []models.ClaudeMessage{
 				{Role: "user", Content: "Hello"},
 			},
@@ -94,6 +97,7 @@ func TestProviderSpecificRequestConversion(t *testing.T) {
 		claudeReq := models.ClaudeRequest{
 			Model:     "claude-sonnet-4-5-20250805",
 			MaxTokens: 1000,
+			Stream:    boolPtr(true),
 			Messages: []models.ClaudeMessage{
 				{Role: "user", Content: "Hello"},
 			},
@@ -141,6 +145,7 @@ func TestProviderSpecificRequestConversion(t *testing.T) {
 		claudeReq := models.ClaudeRequest{
 			Model:     "claude-sonnet-4-5-20250805",
 			MaxTokens: 1000,
+			Stream:    boolPtr(true),
 			Messages: []models.ClaudeMessage{
 				{Role: "user", Content: "Hello"},
 			},
