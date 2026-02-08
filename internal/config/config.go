@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -33,11 +32,11 @@ type CacheKey struct {
 	Model   string // Model name (e.g., "gpt-5", "openai/gpt-5")
 }
 
-// ModelCapabilities tracks which parameters a specific model supports
-// This is learned dynamically through adaptive retry mechanism
+// ModelCapabilities tracks which parameters a specific model supports.
+// Learned dynamically through adaptive retry mechanism.
+// Cache is in-memory only (cleared on restart).
 type ModelCapabilities struct {
-	UsesMaxCompletionTokens bool      // Does this model use max_completion_tokens?
-	LastChecked             time.Time // When was this last verified?
+	UsesMaxCompletionTokens bool // Does this model use max_completion_tokens?
 }
 
 // Global capability cache ((baseURL, model) -> capabilities)
@@ -198,7 +197,6 @@ func GetModelCapabilities(key CacheKey) *ModelCapabilities {
 func SetModelCapabilities(key CacheKey, capabilities *ModelCapabilities) {
 	capabilityCacheMutex.Lock()
 	defer capabilityCacheMutex.Unlock()
-	capabilities.LastChecked = time.Now()
 	modelCapabilityCache[key] = capabilities
 }
 

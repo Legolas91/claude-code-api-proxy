@@ -3,7 +3,6 @@ package server
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/claude-code-proxy/proxy/internal/config"
 )
@@ -140,7 +139,6 @@ func TestCacheHitAndMiss(t *testing.T) {
 	// Test cache set
 	newCaps := &ModelCapabilities{
 		UsesMaxCompletionTokens: true,
-		LastChecked:             time.Now(),
 	}
 	cache.Set(key, newCaps)
 
@@ -179,7 +177,6 @@ func TestPerModelPerProviderScoping(t *testing.T) {
 		key := CacheKey{BaseURL: tc.baseURL, Model: tc.model}
 		caps := &ModelCapabilities{
 			UsesMaxCompletionTokens: tc.supports,
-			LastChecked:             time.Now(),
 		}
 		cache.Set(key, caps)
 	}
@@ -219,7 +216,6 @@ func TestCacheConcurrency(t *testing.T) {
 				}
 				caps := &ModelCapabilities{
 					UsesMaxCompletionTokens: j%2 == 0,
-					LastChecked:             time.Now(),
 				}
 				cache.Set(key, caps)
 			}
@@ -253,41 +249,6 @@ func TestCacheConcurrency(t *testing.T) {
 	close(errors)
 	for err := range errors {
 		t.Errorf("Concurrency error: %s", err)
-	}
-}
-
-// TestCacheTimestampTracking tests that LastChecked is properly tracked
-func TestCacheTimestampTracking(t *testing.T) {
-	cache := &ModelCapabilityCache{
-		data:  make(map[CacheKey]*ModelCapabilities),
-		mutex: &sync.RWMutex{},
-	}
-
-	key := CacheKey{
-		BaseURL: "https://api.openai.com/v1",
-		Model:   "gpt-5",
-	}
-
-	before := time.Now()
-	caps := &ModelCapabilities{
-		UsesMaxCompletionTokens: true,
-		LastChecked:             before,
-	}
-	cache.Set(key, caps)
-
-	retrieved, found := cache.Get(key)
-	if !found {
-		t.Error("Cache entry not found")
-	}
-
-	// Check that timestamp is preserved
-	if !retrieved.LastChecked.Equal(before) {
-		t.Errorf("LastChecked not preserved: %v vs %v", retrieved.LastChecked, before)
-	}
-
-	// Check that timestamp is recent
-	if time.Since(retrieved.LastChecked) > time.Second {
-		t.Error("Cache timestamp should be recent")
 	}
 }
 
@@ -343,7 +304,6 @@ type CacheKey struct {
 // ModelCapabilities holds learned model capabilities
 type ModelCapabilities struct {
 	UsesMaxCompletionTokens bool
-	LastChecked             time.Time
 }
 
 // ModelCapabilityCache manages per-model capabilities

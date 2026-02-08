@@ -755,26 +755,9 @@ func writeSSEError(w *bufio.Writer, message string) {
 	_ = w.Flush()
 }
 
-// callOpenAI makes an HTTP request to the OpenAI API with automatic retry logic
-// for max_completion_tokens parameter errors. Uses per-model capability caching.
-func callOpenAI(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIResponse, error) {
-	// Try the request with the configured parameters
-	resp, err := callOpenAIInternal(req, cfg)
-	if err != nil {
-		// Check if this is a max_tokens parameter error
-		if isMaxTokensParameterError(err.Error()) {
-			if cfg.Debug {
-				fmt.Printf("[DEBUG] Detected max_completion_tokens parameter error for model %s, retrying without it\n", req.Model)
-			}
-			// Retry without max_completion_tokens and cache the capability per model
-			return retryWithoutMaxCompletionTokens(req, cfg)
-		}
-		// Other errors - return as-is
-		return nil, err
-	}
-
-	// Success on first try - cache that this (provider, model) supports max_completion_tokens
-	// Only cache if we actually sent max_completion_tokens
+// cacheMaxCompletionTokensSupported caches that a (provider, model) supports max_completion_tokens.
+// Called after a successful first request that included max_completion_tokens.
+func cacheMaxCompletionTokensSupported(req *models.OpenAIRequest, cfg *config.Config) {
 	if req.MaxCompletionTokens > 0 {
 		cacheKey := config.CacheKey{
 			BaseURL: cfg.OpenAIBaseURL,
@@ -787,54 +770,43 @@ func callOpenAI(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIRe
 			fmt.Printf("[DEBUG] Cached: model %s supports max_completion_tokens\n", req.Model)
 		}
 	}
+}
 
+// callOpenAI makes an HTTP request to the OpenAI API with automatic retry logic
+// for max_completion_tokens parameter errors. Uses per-model capability caching.
+func callOpenAI(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIResponse, error) {
+	resp, err := callOpenAIInternal(req, cfg)
+	if err != nil {
+		if isMaxTokensParameterError(err.Error()) {
+			if cfg.Debug {
+				fmt.Printf("[DEBUG] Detected max_completion_tokens parameter error for model %s, retrying without it\n", req.Model)
+			}
+			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
+			return callOpenAIInternal(&retryReq, cfg)
+		}
+		return nil, err
+	}
+
+	cacheMaxCompletionTokensSupported(req, cfg)
 	return resp, nil
 }
 
 // callOpenAIStream makes a streaming HTTP request with retry logic for parameter errors.
 // Uses per-model capability caching.
 func callOpenAIStream(req *models.OpenAIRequest, cfg *config.Config) (*http.Response, error) {
-	// Try with configured parameters
 	resp, err := callOpenAIStreamInternal(req, cfg)
 	if err != nil {
-		// Check if this is a max_tokens parameter error
 		if isMaxTokensParameterError(err.Error()) {
 			if cfg.Debug {
 				fmt.Printf("[DEBUG] Detected max_completion_tokens parameter error in stream for model %s, retrying without it\n", req.Model)
 			}
-			// Create retry request without max tokens
-			retryReq := *req
-			retryReq.MaxCompletionTokens = 0
-			retryReq.MaxTokens = 0
-
-			// Cache that this (provider, model) doesn't support max_completion_tokens
-			cacheKey := config.CacheKey{
-				BaseURL: cfg.OpenAIBaseURL,
-				Model:   req.Model,
-			}
-			config.SetModelCapabilities(cacheKey, &config.ModelCapabilities{
-				UsesMaxCompletionTokens: false,
-			})
-
+			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
 			return callOpenAIStreamInternal(&retryReq, cfg)
 		}
 		return nil, err
 	}
 
-	// Success - cache capability if we sent max_completion_tokens
-	if req.MaxCompletionTokens > 0 {
-		cacheKey := config.CacheKey{
-			BaseURL: cfg.OpenAIBaseURL,
-			Model:   req.Model,
-		}
-		config.SetModelCapabilities(cacheKey, &config.ModelCapabilities{
-			UsesMaxCompletionTokens: true,
-		})
-		if cfg.Debug {
-			fmt.Printf("[DEBUG] Cached: model %s supports max_completion_tokens (streaming)\n", req.Model)
-		}
-	}
-
+	cacheMaxCompletionTokensSupported(req, cfg)
 	return resp, nil
 }
 
@@ -923,19 +895,20 @@ func isMaxTokensParameterError(errorMessage string) bool {
 	return hasParamIndicator && hasOurParam
 }
 
-// retryWithoutMaxCompletionTokens attempts the request again without max_completion_tokens.
-// Caches the result per (provider, model) combination for future requests.
-func retryWithoutMaxCompletionTokens(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIResponse, error) {
-	// Create a copy of the request without max_completion_tokens
+// prepareRetryWithoutMaxCompletionTokens creates a copy of the request with
+// max_completion_tokens transferred to max_tokens, and caches the capability.
+// Shared by both streaming and non-streaming retry paths.
+func prepareRetryWithoutMaxCompletionTokens(req *models.OpenAIRequest, cfg *config.Config) models.OpenAIRequest {
 	retryReq := *req
+	retryReq.MaxTokens = retryReq.MaxCompletionTokens
 	retryReq.MaxCompletionTokens = 0
-	retryReq.MaxTokens = 0 // Also clear max_tokens to avoid issues
 
 	if cfg.Debug {
-		fmt.Printf("[DEBUG] Retrying without max_completion_tokens/max_tokens for model: %s\n", req.Model)
+		fmt.Printf("[DEBUG] Retrying with max_tokens=%d (was max_completion_tokens) for model: %s\n",
+			retryReq.MaxTokens, req.Model)
 	}
 
-	// Cache that this specific (provider, model) doesn't support max_completion_tokens
+	// Cache that this (provider, model) doesn't support max_completion_tokens
 	cacheKey := config.CacheKey{
 		BaseURL: cfg.OpenAIBaseURL,
 		Model:   req.Model,
@@ -944,8 +917,7 @@ func retryWithoutMaxCompletionTokens(req *models.OpenAIRequest, cfg *config.Conf
 		UsesMaxCompletionTokens: false,
 	})
 
-	// Make the retry request
-	return callOpenAIInternal(&retryReq, cfg)
+	return retryReq
 }
 
 // callOpenAIInternal is the internal implementation without retry logic
