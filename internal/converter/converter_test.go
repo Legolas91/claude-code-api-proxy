@@ -78,6 +78,74 @@ func TestExtractSystemText(t *testing.T) {
 	}
 }
 
+// TestSanitizeSystemPrompt tests Claude model identity replacement in system prompts
+func TestSanitizeSystemPrompt(t *testing.T) {
+	tests := []struct {
+		name          string
+		systemText    string
+		providerModel string
+		expected      string
+	}{
+		{
+			name:          "replaces Opus identity",
+			systemText:    "Some instructions. You are powered by the model named Opus 4.6. The exact model ID is claude-opus-4-6. More instructions.",
+			providerModel: "codestral-2508",
+			expected:      "Some instructions. You are powered by the model codestral-2508 via claude-code-proxy. More instructions.",
+		},
+		{
+			name:          "replaces Sonnet identity",
+			systemText:    "You are powered by the model named Sonnet 4.5. The exact model ID is claude-sonnet-4-5-20250929. Be helpful.",
+			providerModel: "mistral-small-3.2-24b-instruct",
+			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via claude-code-proxy. Be helpful.",
+		},
+		{
+			name:          "replaces Haiku identity",
+			systemText:    "You are powered by the model named Haiku 4.5. The exact model ID is claude-haiku-4-5-20251001. Done.",
+			providerModel: "mistral-small-3.2-24b-instruct",
+			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via claude-code-proxy. Done.",
+		},
+		{
+			name:          "removes model family listing",
+			systemText:    "Before. The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: 'claude-opus-4-6', Sonnet 4.5: 'claude-sonnet-4-5-20250929', Haiku 4.5: 'claude-haiku-4-5-20251001'. When building AI applications, default to the latest and most capable Claude models. After.",
+			providerModel: "mistral-medium-3.1",
+			expected:      "Before.  After.",
+		},
+		{
+			name:          "removes fast_mode_info block",
+			systemText:    "Before.\n<fast_mode_info>\nFast mode for Claude Code uses the same Claude Opus 4.6 model with faster output. It does NOT switch to a different model. It can be toggled with /fast.\n</fast_mode_info>\nAfter.",
+			providerModel: "mistral-medium-3.1",
+			expected:      "Before.\n\nAfter.",
+		},
+		{
+			name:          "sanitizes all patterns together",
+			systemText:    "You are powered by the model named Opus 4.6. The exact model ID is claude-opus-4-6. The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: 'claude-opus-4-6'. When building AI applications, default to the latest and most capable Claude models. <fast_mode_info>\nClaude Opus 4.6\n</fast_mode_info>",
+			providerModel: "mistral-medium-3.1",
+			expected:      "You are powered by the model mistral-medium-3.1 via claude-code-proxy.  ",
+		},
+		{
+			name:          "no match leaves text unchanged",
+			systemText:    "You are a helpful assistant.",
+			providerModel: "codestral-2508",
+			expected:      "You are a helpful assistant.",
+		},
+		{
+			name:          "empty system text",
+			systemText:    "",
+			providerModel: "codestral-2508",
+			expected:      "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeSystemPrompt(tt.systemText, tt.providerModel)
+			if result != tt.expected {
+				t.Errorf("sanitizeSystemPrompt() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestMapModel tests model routing logic
 func TestMapModel(t *testing.T) {
 	cfg := &config.Config{

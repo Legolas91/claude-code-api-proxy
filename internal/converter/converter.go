@@ -8,11 +8,41 @@ package converter
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/pkg/models"
 )
+
+// Regex patterns matching Claude model identification in the system prompt.
+var (
+	// "You are powered by the model named Opus 4.6. The exact model ID is claude-opus-4-6."
+	reModelIdentity = regexp.MustCompile(
+		`You are powered by the model named .+?\.\s*The exact model ID is [^.]+\.`,
+	)
+	// "The most recent Claude model family is Claude 4.5/4.6. Model IDs — ... Claude models."
+	reModelFamily = regexp.MustCompile(
+		`(?s)The most recent Claude model family.+?most capable Claude models\.`,
+	)
+	// "<fast_mode_info>...Claude Opus 4.6 model...</fast_mode_info>"
+	reFastMode = regexp.MustCompile(
+		`<fast_mode_info>[\s\S]*?</fast_mode_info>`,
+	)
+)
+
+// sanitizeSystemPrompt replaces Claude model identification in the system prompt
+// with the actual provider model name, preventing the backend model from
+// incorrectly identifying itself as a Claude model.
+func sanitizeSystemPrompt(systemText string, providerModel string) string {
+	// Replace main identity line
+	replacement := fmt.Sprintf("You are powered by the model %s via claude-code-proxy.", providerModel)
+	result := reModelIdentity.ReplaceAllString(systemText, replacement)
+	// Remove model family listing and fast mode info (both leak Claude model names)
+	result = reModelFamily.ReplaceAllString(result, "")
+	result = reFastMode.ReplaceAllString(result, "")
+	return result
+}
 
 // Default model mappings when env overrides are not set
 // These can be overridden using:
@@ -88,6 +118,9 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 
 	// Extract system message (can be string or array of content blocks)
 	systemText := extractSystemText(claudeReq.System)
+
+	// Replace Claude model identity with actual provider model name
+	systemText = sanitizeSystemPrompt(systemText, openaiModel)
 
 	// Convert messages
 	openaiMessages := convertMessages(claudeReq.Messages, systemText)
