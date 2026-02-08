@@ -331,7 +331,7 @@ func TestStreamOpenAIToClaude_TextConversion(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -385,7 +385,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_ReasoningContent(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -420,7 +420,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_Reasoning(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -446,7 +446,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_ReasoningDetails(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -473,7 +473,7 @@ func TestStreamOpenAIToClaude_ToolCalls(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -522,7 +522,7 @@ func TestStreamOpenAIToClaude_FinishReasons(t *testing.T) {
 			w := bufio.NewWriter(&buf)
 			cfg := &config.Config{}
 
-			streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+			streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 			w.Flush()
 
 			output := buf.String()
@@ -547,7 +547,7 @@ func TestStreamOpenAIToClaude_ThinkingOnlyResponse(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -582,7 +582,7 @@ func TestStreamOpenAIToClaude_UsageTracking(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -606,7 +606,7 @@ func TestStreamOpenAIToClaude_EmptyStream(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -780,7 +780,7 @@ func TestStreamOpenAIToClaude_MalformedJSON(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -803,7 +803,7 @@ func TestStreamOpenAIToClaude_EmptyChoices(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()
@@ -831,7 +831,7 @@ func TestStreamOpenAIToClaude_InvalidChoiceType(t *testing.T) {
 	cfg := &config.Config{}
 
 	// Should not panic thanks to the type assertion check
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
 	w.Flush()
 
 	output := buf.String()

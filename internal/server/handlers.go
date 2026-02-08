@@ -101,7 +101,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 
 	// Handle streaming vs non-streaming
 	if openaiReq.Stream != nil && *openaiReq.Stream {
-		return handleStreamingMessages(c, openaiReq, cfg)
+		return handleStreamingMessages(c, openaiReq, claudeReq.Model, cfg)
 	}
 
 	// Track timing for simple log
@@ -194,7 +194,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 // handleStreamingMessages handles streaming SSE responses from the provider.
 // It forwards the OpenAI request, receives streaming chunks, and converts them to
 // Claude's SSE event format in real-time using streamOpenAIToClaude.
-func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, cfg *config.Config) error {
+func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, claudeModel string, cfg *config.Config) error {
 	// Track timing for simple log
 	startTime := time.Now()
 
@@ -229,7 +229,7 @@ func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, cfg 
 		}
 
 		// Stream conversion
-		streamOpenAIToClaude(w, resp.Body, openaiReq.Model, cfg, startTime)
+		streamOpenAIToClaude(w, resp.Body, openaiReq.Model, claudeModel, cfg, startTime)
 
 		if cfg.Debug {
 			fmt.Printf("[DEBUG] StreamWriter: Completed\n")
@@ -299,7 +299,7 @@ func (s *thinkingBlockState) emitThinkingDelta(w *bufio.Writer, text string, del
 //
 // The function maintains state to track content block indices, tool call accumulation,
 // and ensures proper event ordering for Claude Code compatibility.
-func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel string, cfg *config.Config, startTime time.Time) {
+func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel string, claudeModel string, cfg *config.Config, startTime time.Time) {
 	if cfg.Debug {
 		fmt.Printf("[DEBUG] streamOpenAIToClaude: Starting conversion\n")
 	}
@@ -334,7 +334,7 @@ func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel strin
 			"id":            messageID,
 			"type":          "message",
 			"role":          "assistant",
-			"model":         providerModel,
+			"model":         claudeModel,
 			"content":       []interface{}{},
 			"stop_reason":   nil,
 			"stop_sequence": nil,
