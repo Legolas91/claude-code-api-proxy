@@ -24,7 +24,7 @@ import (
 
 const (
 	// ProxyVersion is the current version of the Claude Code Proxy
-	ProxyVersion = "1.0.0"
+	ProxyVersion = "1.1.0"
 )
 
 // Start initializes and starts the HTTP server
