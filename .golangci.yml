@@ -9,6 +9,7 @@ linters:
   default: none  # Start with no linters, only enable specific ones
   enable:
     - errcheck
+    - gosec
     - govet
     - ineffassign
     - staticcheck
