@@ -63,6 +63,12 @@ func TestMaxTokensParameterErrorDetection(t *testing.T) {
 			shouldDetect: false,
 			description:  "Should not detect errors for wrong parameters",
 		},
+		{
+			name:         "OASValidation error from enterprise API",
+			errorMsg:     "400 OASValidation: max_completion_tokens is not allowed",
+			shouldDetect: true,
+			description:  "Should detect OASValidation errors from enterprise API gateways",
+		},
 	}
 
 	for _, tt := range tests {
@@ -268,6 +274,8 @@ func TestErrorDetectionBroadMatching(t *testing.T) {
 		"LiteLLM error: invalid parameter max_tokens",
 		"Invalid max_tokens parameter",
 		"Unsupported max_completion_tokens",
+		"400 OASValidation: max_completion_tokens is not allowed",
+		"OASValidation error for max_tokens field",
 	}
 
 	for _, pattern := range shouldMatch {

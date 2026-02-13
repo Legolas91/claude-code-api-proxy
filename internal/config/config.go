@@ -221,11 +221,11 @@ func (c *Config) ShouldUseMaxCompletionTokens(modelName string) bool {
 		return caps.UsesMaxCompletionTokens
 	}
 
-	// Cache miss - default to trying max_completion_tokens first
-	// The retry mechanism in handlers.go will detect if it's not supported
-	// and automatically fall back to max_tokens, then cache the result
+	// Cache miss - default to max_tokens for maximum compatibility
+	// Most providers (including enterprise API gateways) support max_tokens.
+	// The retry mechanism in handlers.go handles the opposite case if needed.
 	if c.Debug {
-		fmt.Printf("[DEBUG] Cache MISS: %s → will auto-detect (try max_completion_tokens)\n", modelName)
+		fmt.Printf("[DEBUG] Cache MISS: %s → will auto-detect (try max_tokens first)\n", modelName)
 	}
-	return true
+	return false
 }

@@ -885,7 +885,8 @@ func isMaxTokensParameterError(errorMessage string) bool {
 		strings.Contains(errorLower, "unsupported") ||
 		strings.Contains(errorLower, "invalid") ||
 		strings.Contains(errorLower, "extra_forbidden") ||
-		strings.Contains(errorLower, "not permitted")
+		strings.Contains(errorLower, "not permitted") ||
+		strings.Contains(errorLower, "oasvalidation")
 
 	// Check for our specific parameter names
 	hasOurParam := strings.Contains(errorLower, "max_tokens") ||

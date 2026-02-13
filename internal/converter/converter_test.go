@@ -283,8 +283,8 @@ func TestConvertRequest(t *testing.T) {
 			t.Errorf("First message role = %q, want %q", openaiReq.Messages[0].Role, "system")
 		}
 
-		if openaiReq.MaxCompletionTokens != 1000 {
-			t.Errorf("MaxCompletionTokens = %d, want 1000", openaiReq.MaxCompletionTokens)
+		if openaiReq.MaxTokens != 1000 {
+			t.Errorf("MaxTokens = %d, want 1000", openaiReq.MaxTokens)
 		}
 
 		if *openaiReq.Temperature != temp {

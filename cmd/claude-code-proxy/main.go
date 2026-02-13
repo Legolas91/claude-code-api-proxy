@@ -37,7 +37,7 @@ func main() {
 			daemon.Status()
 			return
 		case "version":
-			fmt.Println("claude-code-proxy v1.0.0")
+			fmt.Println("claude-code-proxy v1.3.1")
 			return
 		case "help", "-h", "--help":
 			printHelp()

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-02-13
+
+### Added
+- **Enterprise API compatibility** - Support for corporate OpenAI-compatible APIs
+  - Added `oasvalidation` keyword to `isMaxTokensParameterError()` detection
+  - Handles `400 OASValidation` errors from enterprise API gateways
+  - New test cases for OASValidation error patterns
+
+### Changed
+- **Default token parameter strategy** - Changed default from `max_completion_tokens` to `max_tokens`
+  - `ShouldUseMaxCompletionTokens()` now returns `false` on cache miss (was `true`)
+  - Eliminates failed first-request for providers that only support `max_tokens`
+  - More compatible with enterprise APIs (Mistral/Codestral endpoints)
+  - Retry mechanism still handles the reverse case if needed
+
 ## [1.3.0] - 2025-11-13
 
 ### Added
