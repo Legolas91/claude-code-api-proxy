@@ -531,6 +531,162 @@ func TestPassthroughMode(t *testing.T) {
 	}
 }
 
+// TestGetBaseURLForModel tests per-tier base URL routing with fallback
+func TestGetBaseURLForModel(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         Config
+		modelName   string
+		expectedURL string
+	}{
+		{
+			name: "Opus model with specific base URL",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				OpusModel:     "mistral-large-2502",
+				OpusBaseURL:   "https://api.corp.example/llm-large/v1",
+			},
+			modelName:   "mistral-large-2502",
+			expectedURL: "https://api.corp.example/llm-large/v1",
+		},
+		{
+			name: "Sonnet model with specific base URL",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				SonnetModel:   "codestral-2503",
+				SonnetBaseURL: "https://api.corp.example/codestral/v1",
+			},
+			modelName:   "codestral-2503",
+			expectedURL: "https://api.corp.example/codestral/v1",
+		},
+		{
+			name: "Haiku model with specific base URL",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				HaikuModel:    "mistral-medium-2508",
+				HaikuBaseURL:  "https://api.corp.example/llm-medium/v1",
+			},
+			modelName:   "mistral-medium-2508",
+			expectedURL: "https://api.corp.example/llm-medium/v1",
+		},
+		{
+			name: "Unknown model falls back to default",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				OpusModel:     "mistral-large-2502",
+				OpusBaseURL:   "https://api.corp.example/llm-large/v1",
+			},
+			modelName:   "some-other-model",
+			expectedURL: "https://default.example.com/v1",
+		},
+		{
+			name: "Model matches but no base URL configured - fallback",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				OpusModel:     "mistral-large-2502",
+				OpusBaseURL:   "", // not configured
+			},
+			modelName:   "mistral-large-2502",
+			expectedURL: "https://default.example.com/v1",
+		},
+		{
+			name: "No tier models configured - fallback",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+			},
+			modelName:   "gpt-5",
+			expectedURL: "https://default.example.com/v1",
+		},
+		{
+			name: "All tiers configured - each routes correctly",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.example.com/v1",
+				OpusModel:     "mistral-large-2502",
+				OpusBaseURL:   "https://large.example.com/v1",
+				SonnetModel:   "codestral-2503",
+				SonnetBaseURL: "https://codestral.example.com/v1",
+				HaikuModel:    "mistral-medium-2508",
+				HaikuBaseURL:  "https://medium.example.com/v1",
+			},
+			modelName:   "codestral-2503",
+			expectedURL: "https://codestral.example.com/v1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.cfg.GetBaseURLForModel(tt.modelName)
+			if result != tt.expectedURL {
+				t.Errorf("GetBaseURLForModel(%q) = %q, want %q",
+					tt.modelName, result, tt.expectedURL)
+			}
+		})
+	}
+}
+
+// TestGetBaseURLForModelWithLoad tests that per-tier base URLs are loaded from env vars
+func TestGetBaseURLForModelWithLoad(t *testing.T) {
+	// Save original env
+	envVars := []string{
+		"OPENAI_API_KEY", "OPENAI_BASE_URL",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_OPUS_BASE_URL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_SONNET_BASE_URL",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_HAIKU_BASE_URL",
+	}
+	originals := make(map[string]string)
+	for _, key := range envVars {
+		originals[key] = os.Getenv(key)
+	}
+	defer func() {
+		for key, val := range originals {
+			if val != "" {
+				os.Setenv(key, val)
+			} else {
+				os.Unsetenv(key)
+			}
+		}
+	}()
+
+	// Set env vars
+	os.Setenv("OPENAI_API_KEY", "test-key")
+	os.Setenv("OPENAI_BASE_URL", "https://default.example.com/v1")
+	os.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "mistral-large-2502")
+	os.Setenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL", "https://large.example.com/v1")
+	os.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "codestral-2503")
+	os.Setenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL", "https://codestral.example.com/v1")
+	os.Setenv("ANTHROPIC_DEFAULT_HAIKU_MODEL", "mistral-medium-2508")
+	os.Setenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL", "https://medium.example.com/v1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.OpusBaseURL != "https://large.example.com/v1" {
+		t.Errorf("OpusBaseURL = %q, want %q", cfg.OpusBaseURL, "https://large.example.com/v1")
+	}
+	if cfg.SonnetBaseURL != "https://codestral.example.com/v1" {
+		t.Errorf("SonnetBaseURL = %q, want %q", cfg.SonnetBaseURL, "https://codestral.example.com/v1")
+	}
+	if cfg.HaikuBaseURL != "https://medium.example.com/v1" {
+		t.Errorf("HaikuBaseURL = %q, want %q", cfg.HaikuBaseURL, "https://medium.example.com/v1")
+	}
+
+	// Test routing
+	if url := cfg.GetBaseURLForModel("mistral-large-2502"); url != "https://large.example.com/v1" {
+		t.Errorf("GetBaseURLForModel(opus) = %q, want large URL", url)
+	}
+	if url := cfg.GetBaseURLForModel("codestral-2503"); url != "https://codestral.example.com/v1" {
+		t.Errorf("GetBaseURLForModel(sonnet) = %q, want codestral URL", url)
+	}
+	if url := cfg.GetBaseURLForModel("mistral-medium-2508"); url != "https://medium.example.com/v1" {
+		t.Errorf("GetBaseURLForModel(haiku) = %q, want medium URL", url)
+	}
+	if url := cfg.GetBaseURLForModel("unknown-model"); url != "https://default.example.com/v1" {
+		t.Errorf("GetBaseURLForModel(unknown) = %q, want default URL", url)
+	}
+}
+
 // TestMultipleEnvFiles tests that env files are loaded in correct priority order
 func TestMultipleEnvFiles(t *testing.T) {
 	// Create temporary directory for test env files

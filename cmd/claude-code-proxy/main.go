@@ -37,7 +37,7 @@ func main() {
 			daemon.Status()
 			return
 		case "version":
-			fmt.Println("claude-code-proxy v1.3.1")
+			fmt.Println("claude-code-proxy v1.4.0")
 			return
 		case "help", "-h", "--help":
 			printHelp()
@@ -110,12 +110,15 @@ Configuration:
     OPENAI_API_KEY         Your OpenAI API key
 
   Optional:
-    ANTHROPIC_DEFAULT_OPUS_MODEL    Override opus routing
-    ANTHROPIC_DEFAULT_SONNET_MODEL  Override sonnet routing
-    ANTHROPIC_DEFAULT_HAIKU_MODEL   Override haiku routing
-    OPENAI_BASE_URL                 OpenAI API base URL
-    HOST                            Server host (default: 0.0.0.0)
-    PORT                            Server port (default: 8082)
+    ANTHROPIC_DEFAULT_OPUS_MODEL      Override opus model name
+    ANTHROPIC_DEFAULT_OPUS_BASE_URL   Override opus base URL
+    ANTHROPIC_DEFAULT_SONNET_MODEL    Override sonnet model name
+    ANTHROPIC_DEFAULT_SONNET_BASE_URL Override sonnet base URL
+    ANTHROPIC_DEFAULT_HAIKU_MODEL     Override haiku model name
+    ANTHROPIC_DEFAULT_HAIKU_BASE_URL  Override haiku base URL
+    OPENAI_BASE_URL                   Default base URL (fallback)
+    HOST                              Server host (default: 0.0.0.0)
+    PORT                              Server port (default: 8082)
 
 Examples:
   # Start proxy

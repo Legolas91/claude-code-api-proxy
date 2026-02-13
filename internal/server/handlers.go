@@ -181,7 +181,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		timestamp := time.Now().Format("15:04:05")
 		fmt.Printf("[%s] [REQ] %s model=%s in=%d out=%d tok/s=%.1f\n",
 			timestamp,
-			cfg.OpenAIBaseURL,
+			cfg.GetBaseURLForModel(openaiReq.Model),
 			openaiReq.Model,
 			claudeResp.Usage.InputTokens,
 			claudeResp.Usage.OutputTokens,
@@ -210,7 +210,7 @@ func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, clau
 		}
 
 		if cfg.Debug {
-			fmt.Printf("[DEBUG] StreamWriter: Making streaming request to %s\n", cfg.OpenAIBaseURL+"/chat/completions")
+			fmt.Printf("[DEBUG] StreamWriter: Making streaming request to %s\n", cfg.GetBaseURLForModel(openaiReq.Model)+"/chat/completions")
 		}
 
 		// Make streaming request with automatic retry logic
@@ -719,7 +719,7 @@ func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel strin
 		timestamp := time.Now().Format("15:04:05")
 		fmt.Printf("[%s] [REQ] %s model=%s in=%d out=%d tok/s=%.1f\n",
 			timestamp,
-			cfg.OpenAIBaseURL,
+			cfg.GetBaseURLForModel(providerModel),
 			providerModel,
 			inputTokens,
 			outputTokens,
@@ -760,7 +760,7 @@ func writeSSEError(w *bufio.Writer, message string) {
 func cacheMaxCompletionTokensSupported(req *models.OpenAIRequest, cfg *config.Config) {
 	if req.MaxCompletionTokens > 0 {
 		cacheKey := config.CacheKey{
-			BaseURL: cfg.OpenAIBaseURL,
+			BaseURL: cfg.GetBaseURLForModel(req.Model),
 			Model:   req.Model,
 		}
 		config.SetModelCapabilities(cacheKey, &config.ModelCapabilities{
@@ -819,7 +819,8 @@ func makeOpenAIHTTPRequest(req *models.OpenAIRequest, cfg *config.Config, timeou
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	apiURL := cfg.OpenAIBaseURL + "/chat/completions"
+	baseURL := cfg.GetBaseURLForModel(req.Model)
+	apiURL := baseURL + "/chat/completions"
 
 	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -911,7 +912,7 @@ func prepareRetryWithoutMaxCompletionTokens(req *models.OpenAIRequest, cfg *conf
 
 	// Cache that this (provider, model) doesn't support max_completion_tokens
 	cacheKey := config.CacheKey{
-		BaseURL: cfg.OpenAIBaseURL,
+		BaseURL: cfg.GetBaseURLForModel(req.Model),
 		Model:   req.Model,
 	}
 	config.SetModelCapabilities(cacheKey, &config.ModelCapabilities{

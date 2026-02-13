@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-02-13
+
+### Added
+- **Multi-URL routing per tier** - Route each Claude tier to a different backend API endpoint
+  - `ANTHROPIC_DEFAULT_OPUS_BASE_URL` - Base URL for opus tier requests
+  - `ANTHROPIC_DEFAULT_SONNET_BASE_URL` - Base URL for sonnet tier requests
+  - `ANTHROPIC_DEFAULT_HAIKU_BASE_URL` - Base URL for haiku tier requests
+  - Falls back to `OPENAI_BASE_URL` when tier-specific URL is not configured
+  - Enables routing to multiple enterprise API endpoints (LLM Large, Codestral, LLM Medium)
+- `GetBaseURLForModel()` method on Config for dynamic URL resolution
+- Unit tests for per-tier base URL routing and fallback behavior
+
+### Changed
+- `makeOpenAIHTTPRequest()` now uses `GetBaseURLForModel()` instead of hardcoded `OpenAIBaseURL`
+- `ShouldUseMaxCompletionTokens()` cache key uses per-model base URL
+- Capability cache keys (`cacheMaxCompletionTokensSupported`, `prepareRetryWithoutMaxCompletionTokens`) use per-model base URL
+- Simple log and debug log now display the actual base URL used per request
+- Updated `printHelp()` with new environment variables documentation
+
 ## [1.3.1] - 2026-02-13
 
 ### Added

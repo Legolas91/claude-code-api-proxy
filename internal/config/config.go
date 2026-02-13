@@ -60,6 +60,11 @@ type Config struct {
 	SonnetModel string
 	HaikuModel  string
 
+	// Per-tier base URLs (optional, fallback to OpenAIBaseURL)
+	OpusBaseURL   string
+	SonnetBaseURL string
+	HaikuBaseURL  string
+
 	// Server settings
 	Host string
 	Port string
@@ -108,6 +113,11 @@ func Load() (*Config, error) {
 		OpusModel:   os.Getenv("ANTHROPIC_DEFAULT_OPUS_MODEL"),
 		SonnetModel: os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL"),
 		HaikuModel:  os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL"),
+
+		// Per-tier base URLs (optional, fallback to OpenAIBaseURL)
+		OpusBaseURL:   os.Getenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL"),
+		SonnetBaseURL: os.Getenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL"),
+		HaikuBaseURL:  os.Getenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL"),
 
 		// Server settings
 		Host: getEnvOrDefault("HOST", "0.0.0.0"),
@@ -200,13 +210,29 @@ func SetModelCapabilities(key CacheKey, capabilities *ModelCapabilities) {
 	modelCapabilityCache[key] = capabilities
 }
 
+// GetBaseURLForModel returns the base URL for the given model name.
+// It checks if the model matches a tier with a specific base URL configured,
+// otherwise falls back to the default OpenAIBaseURL.
+func (c *Config) GetBaseURLForModel(modelName string) string {
+	if c.OpusModel != "" && modelName == c.OpusModel && c.OpusBaseURL != "" {
+		return c.OpusBaseURL
+	}
+	if c.SonnetModel != "" && modelName == c.SonnetModel && c.SonnetBaseURL != "" {
+		return c.SonnetBaseURL
+	}
+	if c.HaikuModel != "" && modelName == c.HaikuModel && c.HaikuBaseURL != "" {
+		return c.HaikuBaseURL
+	}
+	return c.OpenAIBaseURL
+}
+
 // ShouldUseMaxCompletionTokens determines if we should send max_completion_tokens
 // based on cached model capabilities learned through adaptive detection.
 // No hardcoded model patterns - tries max_completion_tokens for ALL models on first request.
 func (c *Config) ShouldUseMaxCompletionTokens(modelName string) bool {
 	// Build cache key for this (provider, model) combination
 	key := CacheKey{
-		BaseURL: c.OpenAIBaseURL,
+		BaseURL: c.GetBaseURLForModel(modelName),
 		Model:   modelName,
 	}
 
