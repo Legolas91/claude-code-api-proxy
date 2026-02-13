@@ -16,15 +16,11 @@ import (
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/converter"
 	"github.com/claude-code-proxy/proxy/internal/daemon"
+	"github.com/claude-code-proxy/proxy/internal/version"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-)
-
-const (
-	// ProxyVersion is the current version of the Claude Code Proxy
-	ProxyVersion = "1.2.3"
 )
 
 // Start initializes and starts the HTTP server
@@ -32,7 +28,7 @@ func Start(cfg *config.Config) error {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ServerHeader:          "Claude-Code-Proxy",
-		AppName:               "Claude Code Proxy v" + ProxyVersion,
+		AppName:               "Claude Code Proxy v" + version.Version,
 	})
 
 	// Middleware
@@ -54,7 +50,7 @@ func Start(cfg *config.Config) error {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "ok",
-			"version": ProxyVersion,
+			"version": version.Version,
 		})
 	})
 
@@ -62,7 +58,7 @@ func Start(cfg *config.Config) error {
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"message": "Claude Code Proxy",
-			"version": ProxyVersion,
+			"version": version.Version,
 			"status":  "running",
 			"config": fiber.Map{
 				"openai_base_url": cfg.OpenAIBaseURL,

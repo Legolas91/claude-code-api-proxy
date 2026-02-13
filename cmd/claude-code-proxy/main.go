@@ -7,6 +7,7 @@ import (
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/daemon"
 	"github.com/claude-code-proxy/proxy/internal/server"
+	"github.com/claude-code-proxy/proxy/internal/version"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 			daemon.Status()
 			return
 		case "version":
-			fmt.Println("claude-code-proxy v1.4.0")
+			fmt.Printf("claude-code-proxy %s\n", version.Version)
 			return
 		case "help", "-h", "--help":
 			printHelp()
