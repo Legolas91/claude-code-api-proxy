@@ -22,6 +22,7 @@ var (
 // IsRunning checks if the proxy daemon is running
 func IsRunning() bool {
 	// Try health check first
+	// #nosec G107 -- Health check to localhost only, URL is controlled constant
 	resp, err := http.Get(healthURL)
 	if err == nil {
 		_ = resp.Body.Close()
@@ -94,10 +95,11 @@ func Status() {
 
 func writePID() error {
 	pid := os.Getpid()
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644)
+	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0600)
 }
 
 func readPID() (int, error) {
+	// #nosec G304 -- PID file path is controlled constant in temp directory
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		return 0, err

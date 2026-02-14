@@ -106,6 +106,11 @@ func TestStart(t *testing.T) {
 	// Clean up any existing PID file
 	cleanupPID()
 
+	// Skip test if proxy is already running (via health check)
+	if IsRunning() {
+		t.Skip("Skipping TestStart: proxy is already running on localhost:8082")
+	}
+
 	// Start should succeed if proxy is not running
 	err := Start()
 	if err != nil {
