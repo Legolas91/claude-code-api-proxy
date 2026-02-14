@@ -205,6 +205,51 @@ Provider detection via URL pattern matching in `DetectProvider()`:
 - Contains `localhost` or `127.0.0.1` → ProviderOllama
 - Otherwise → ProviderUnknown
 
+### Enterprise HTTP Proxy Support
+
+The proxy supports HTTP/HTTPS proxy configuration for corporate environments where internet access requires going through a proxy.
+
+**Configuration variables:**
+
+```bash
+# Custom proxy (override system proxy)
+CLAUDE_HTTP_PROXY=http://proxy.company.com:8080
+CLAUDE_HTTPS_PROXY=http://proxy.company.com:8080
+CLAUDE_NO_PROXY=localhost,127.0.0.1,.internal,.local
+
+# Control system proxy usage (default: true)
+CLAUDE_PROXY_FROM_ENV=true  # Use HTTP_PROXY/HTTPS_PROXY if set
+CLAUDE_PROXY_FROM_ENV=false # Ignore system proxy completely
+```
+
+**Priority order:**
+1. `CLAUDE_HTTP_PROXY` / `CLAUDE_HTTPS_PROXY` (highest - custom override)
+2. `HTTP_PROXY` / `HTTPS_PROXY` if `CLAUDE_PROXY_FROM_ENV=true` (default)
+3. No proxy if all disabled
+
+**NO_PROXY patterns:**
+- Exact match: `localhost`, `127.0.0.1`
+- Domain suffix: `.company.com` matches `api.company.com`
+- Suffix without dot: `internal` matches `api.internal`
+- Wildcard: `*` bypasses all hosts
+
+**Implementation:**
+- `Config.GetHTTPTransport()` creates `http.Transport` with proxy function
+- `shouldBypassProxy()` implements NO_PROXY pattern matching
+- `makeOpenAIHTTPRequest()` uses configured transport for all provider requests
+- Uses `req.URL.Hostname()` to extract hostname without port for matching
+
+**Use cases:**
+- Corporate proxy required for all internet access
+- Different proxy for LLM providers (less restrictive proxy)
+- Bypass proxy for local services (Ollama on localhost)
+- Hybrid setup: cloud providers via proxy, local models direct
+
+**Testing:**
+- `TestHTTPProxyConfiguration` validates config loading
+- `TestGetHTTPTransport` validates proxy routing logic
+- `TestShouldBypassProxy` validates NO_PROXY pattern matching
+
 ## Testing Strategy
 
 The test suite has two main categories:

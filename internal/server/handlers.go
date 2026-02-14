@@ -843,7 +843,11 @@ func makeOpenAIHTTPRequest(req *models.OpenAIRequest, cfg *config.Config, baseUR
 		addOpenRouterHeaders(httpReq, cfg)
 	}
 
-	client := &http.Client{Timeout: timeout}
+	// Create HTTP client with proxy support (enterprise)
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: cfg.GetHTTPTransport(),
+	}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {

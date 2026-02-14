@@ -1,6 +1,8 @@
 package config
 
 import (
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -848,5 +850,288 @@ func TestGetProviderForTier(t *testing.T) {
 				t.Errorf("GetProviderForTier(%q) model = %q, want %q", tt.tier, gotModel, tt.wantModel)
 			}
 		})
+	}
+}
+
+// TestHTTPProxyConfiguration tests HTTP proxy configuration
+func TestHTTPProxyConfiguration(t *testing.T) {
+	// Save original env
+	originalHTTPProxy := os.Getenv("CLAUDE_HTTP_PROXY")
+	originalHTTPSProxy := os.Getenv("CLAUDE_HTTPS_PROXY")
+	originalNoProxy := os.Getenv("CLAUDE_NO_PROXY")
+	originalProxyFromEnv := os.Getenv("CLAUDE_PROXY_FROM_ENV")
+	originalKey := os.Getenv("OPENAI_API_KEY")
+	originalBaseURL := os.Getenv("OPENAI_BASE_URL")
+
+	defer func() {
+		restoreEnv("CLAUDE_HTTP_PROXY", originalHTTPProxy)
+		restoreEnv("CLAUDE_HTTPS_PROXY", originalHTTPSProxy)
+		restoreEnv("CLAUDE_NO_PROXY", originalNoProxy)
+		restoreEnv("CLAUDE_PROXY_FROM_ENV", originalProxyFromEnv)
+		restoreEnv("OPENAI_API_KEY", originalKey)
+		restoreEnv("OPENAI_BASE_URL", originalBaseURL)
+	}()
+
+	tests := []struct {
+		name              string
+		httpProxy         string
+		httpsProxy        string
+		noProxy           string
+		proxyFromEnv      string
+		expectedHTTPProxy string
+		expectedHTTPS     string
+		expectedNoProxy   string
+		expectedFromEnv   bool
+	}{
+		{
+			name:              "custom proxy configured",
+			httpProxy:         "http://proxy.company.com:8080",
+			httpsProxy:        "http://proxy.company.com:8080",
+			noProxy:           "localhost,127.0.0.1,.local",
+			expectedHTTPProxy: "http://proxy.company.com:8080",
+			expectedHTTPS:     "http://proxy.company.com:8080",
+			expectedNoProxy:   "localhost,127.0.0.1,.local",
+			expectedFromEnv:   true, // default
+		},
+		{
+			name:              "proxy disabled",
+			proxyFromEnv:      "false",
+			expectedHTTPProxy: "",
+			expectedHTTPS:     "",
+			expectedNoProxy:   "",
+			expectedFromEnv:   false,
+		},
+		{
+			name:              "proxy from env enabled explicitly",
+			proxyFromEnv:      "true",
+			expectedHTTPProxy: "",
+			expectedHTTPS:     "",
+			expectedNoProxy:   "",
+			expectedFromEnv:   true,
+		},
+		{
+			name:              "default is proxy from env",
+			expectedHTTPProxy: "",
+			expectedHTTPS:     "",
+			expectedNoProxy:   "",
+			expectedFromEnv:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear and set env vars
+			os.Unsetenv("CLAUDE_HTTP_PROXY")
+			os.Unsetenv("CLAUDE_HTTPS_PROXY")
+			os.Unsetenv("CLAUDE_NO_PROXY")
+			os.Unsetenv("CLAUDE_PROXY_FROM_ENV")
+
+			if tt.httpProxy != "" {
+				os.Setenv("CLAUDE_HTTP_PROXY", tt.httpProxy)
+			}
+			if tt.httpsProxy != "" {
+				os.Setenv("CLAUDE_HTTPS_PROXY", tt.httpsProxy)
+			}
+			if tt.noProxy != "" {
+				os.Setenv("CLAUDE_NO_PROXY", tt.noProxy)
+			}
+			if tt.proxyFromEnv != "" {
+				os.Setenv("CLAUDE_PROXY_FROM_ENV", tt.proxyFromEnv)
+			}
+
+			os.Setenv("OPENAI_API_KEY", "test-key")
+			os.Setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load failed: %v", err)
+			}
+
+			if cfg.HTTPProxy != tt.expectedHTTPProxy {
+				t.Errorf("HTTPProxy = %q, want %q", cfg.HTTPProxy, tt.expectedHTTPProxy)
+			}
+			if cfg.HTTPSProxy != tt.expectedHTTPS {
+				t.Errorf("HTTPSProxy = %q, want %q", cfg.HTTPSProxy, tt.expectedHTTPS)
+			}
+			if cfg.NoProxy != tt.expectedNoProxy {
+				t.Errorf("NoProxy = %q, want %q", cfg.NoProxy, tt.expectedNoProxy)
+			}
+			if cfg.ProxyFromEnv != tt.expectedFromEnv {
+				t.Errorf("ProxyFromEnv = %v, want %v", cfg.ProxyFromEnv, tt.expectedFromEnv)
+			}
+		})
+	}
+}
+
+// TestGetHTTPTransport tests HTTP transport creation with proxy
+func TestGetHTTPTransport(t *testing.T) {
+	tests := []struct {
+		name            string
+		cfg             Config
+		testURL         string
+		expectProxyUsed bool
+		expectedProxy   string
+	}{
+		{
+			name: "custom HTTP proxy for http URL",
+			cfg: Config{
+				HTTPProxy:  "http://proxy.test:8080",
+				HTTPSProxy: "http://proxy.test:8080",
+			},
+			testURL:         "http://api.example.com/v1",
+			expectProxyUsed: true,
+			expectedProxy:   "http://proxy.test:8080",
+		},
+		{
+			name: "custom HTTPS proxy for https URL",
+			cfg: Config{
+				HTTPProxy:  "http://proxy.test:8080",
+				HTTPSProxy: "http://proxy-https.test:3128",
+			},
+			testURL:         "https://api.example.com/v1",
+			expectProxyUsed: true,
+			expectedProxy:   "http://proxy-https.test:3128",
+		},
+		{
+			name: "NO_PROXY bypass for localhost",
+			cfg: Config{
+				HTTPProxy: "http://proxy.test:8080",
+				NoProxy:   "localhost,127.0.0.1",
+			},
+			testURL:         "http://localhost:11434/v1",
+			expectProxyUsed: false,
+		},
+		{
+			name: "NO_PROXY bypass for .internal domain",
+			cfg: Config{
+				HTTPProxy: "http://proxy.test:8080",
+				NoProxy:   ".internal,.local",
+			},
+			testURL:         "http://api.internal/v1",
+			expectProxyUsed: false,
+		},
+		{
+			name: "ProxyFromEnv disabled - no proxy",
+			cfg: Config{
+				ProxyFromEnv: false,
+			},
+			testURL:         "https://api.example.com/v1",
+			expectProxyUsed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport := tt.cfg.GetHTTPTransport()
+
+			if transport == nil {
+				t.Fatal("GetHTTPTransport() returned nil")
+			}
+
+			// Create test request
+			req, err := http.NewRequest("GET", tt.testURL, nil)
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
+			// Test proxy function
+			var proxyURL *url.URL
+			if transport.Proxy != nil {
+				proxyURL, err = transport.Proxy(req)
+				if err != nil {
+					t.Fatalf("Proxy function returned error: %v", err)
+				}
+			}
+
+			if tt.expectProxyUsed {
+				if proxyURL == nil {
+					t.Errorf("Expected proxy to be used, but got nil")
+				} else if proxyURL.String() != tt.expectedProxy {
+					t.Errorf("Proxy URL = %q, want %q", proxyURL.String(), tt.expectedProxy)
+				}
+			} else {
+				if proxyURL != nil {
+					t.Errorf("Expected no proxy, but got %q", proxyURL.String())
+				}
+			}
+		})
+	}
+}
+
+// TestShouldBypassProxy tests NO_PROXY pattern matching
+func TestShouldBypassProxy(t *testing.T) {
+	tests := []struct {
+		name     string
+		host     string
+		noProxy  string
+		expected bool
+	}{
+		{
+			name:     "exact match localhost",
+			host:     "localhost",
+			noProxy:  "localhost,127.0.0.1",
+			expected: true,
+		},
+		{
+			name:     "exact match IP",
+			host:     "127.0.0.1",
+			noProxy:  "localhost,127.0.0.1",
+			expected: true,
+		},
+		{
+			name:     "domain suffix match with dot",
+			host:     "api.company.com",
+			noProxy:  ".company.com",
+			expected: true,
+		},
+		{
+			name:     "domain suffix match without dot",
+			host:     "api.internal",
+			noProxy:  "internal",
+			expected: true,
+		},
+		{
+			name:     "wildcard bypasses all",
+			host:     "any.host.com",
+			noProxy:  "*",
+			expected: true,
+		},
+		{
+			name:     "no match",
+			host:     "api.external.com",
+			noProxy:  "localhost,.internal",
+			expected: false,
+		},
+		{
+			name:     "empty noProxy",
+			host:     "api.example.com",
+			noProxy:  "",
+			expected: false,
+		},
+		{
+			name:     "multiple patterns with spaces",
+			host:     "api.local",
+			noProxy:  "localhost, .local, .internal",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := shouldBypassProxy(tt.host, tt.noProxy)
+			if result != tt.expected {
+				t.Errorf("shouldBypassProxy(%q, %q) = %v, want %v",
+					tt.host, tt.noProxy, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper to restore env var
+func restoreEnv(key, value string) {
+	if value != "" {
+		os.Setenv(key, value)
+	} else {
+		os.Unsetenv(key)
 	}
 }

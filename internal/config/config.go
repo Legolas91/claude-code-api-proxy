@@ -7,10 +7,13 @@ package config
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -86,6 +89,12 @@ type Config struct {
 	// OpenRouter-specific (optional, improves rate limits)
 	OpenRouterAppName string
 	OpenRouterAppURL  string
+
+	// HTTP Proxy configuration (enterprise support)
+	HTTPProxy    string // Override HTTP_PROXY env var
+	HTTPSProxy   string // Override HTTPS_PROXY env var
+	NoProxy      string // Comma-separated list of hosts to exclude from proxy
+	ProxyFromEnv bool   // Use system proxy env vars (default: true)
 }
 
 // Load reads configuration from environment variables
@@ -139,6 +148,12 @@ func Load() (*Config, error) {
 		// OpenRouter-specific (optional)
 		OpenRouterAppName: os.Getenv("OPENROUTER_APP_NAME"),
 		OpenRouterAppURL:  os.Getenv("OPENROUTER_APP_URL"),
+
+		// HTTP Proxy configuration (enterprise support)
+		HTTPProxy:    os.Getenv("CLAUDE_HTTP_PROXY"),
+		HTTPSProxy:   os.Getenv("CLAUDE_HTTPS_PROXY"),
+		NoProxy:      os.Getenv("CLAUDE_NO_PROXY"),
+		ProxyFromEnv: getEnvAsBoolOrDefault("CLAUDE_PROXY_FROM_ENV", true),
 	}
 
 	// Validate required fields
@@ -292,5 +307,89 @@ func (c *Config) ShouldUseMaxCompletionTokens(modelName string) bool {
 	if c.Debug {
 		fmt.Printf("[DEBUG] Cache MISS: %s → will auto-detect (try max_tokens first)\n", modelName)
 	}
+	return false
+}
+
+// GetHTTPTransport returns an http.Transport configured with proxy settings.
+// Priority order:
+// 1. CLAUDE_HTTP_PROXY / CLAUDE_HTTPS_PROXY (custom override)
+// 2. HTTP_PROXY / HTTPS_PROXY (system default) if ProxyFromEnv == true
+// 3. No proxy if all disabled
+func (c *Config) GetHTTPTransport() *http.Transport {
+	transport := &http.Transport{
+		// Keep default transport settings for performance
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Check if we should use custom proxy or system proxy
+	if c.HTTPProxy != "" || c.HTTPSProxy != "" {
+		// Custom proxy override
+		transport.Proxy = func(req *http.Request) (*url.URL, error) {
+			// Check NO_PROXY list first
+			// Extract hostname without port for NO_PROXY matching
+			hostname := req.URL.Hostname()
+			if c.NoProxy != "" && shouldBypassProxy(hostname, c.NoProxy) {
+				return nil, nil
+			}
+
+			// Use HTTPS_PROXY for https:// URLs, HTTP_PROXY for http://
+			var proxyURL string
+			if req.URL.Scheme == "https" && c.HTTPSProxy != "" {
+				proxyURL = c.HTTPSProxy
+			} else if c.HTTPProxy != "" {
+				proxyURL = c.HTTPProxy
+			}
+
+			if proxyURL == "" {
+				return nil, nil
+			}
+
+			return url.Parse(proxyURL)
+		}
+	} else if c.ProxyFromEnv {
+		// Use system environment variables (HTTP_PROXY, HTTPS_PROXY, NO_PROXY)
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+	// else: no proxy configured
+
+	return transport
+}
+
+// shouldBypassProxy checks if a host should bypass the proxy based on NO_PROXY rules.
+// Implements standard NO_PROXY semantics (domain suffix matching, IP matching).
+func shouldBypassProxy(host string, noProxy string) bool {
+	if noProxy == "" {
+		return false
+	}
+
+	// Split NO_PROXY into individual patterns
+	patterns := strings.Split(noProxy, ",")
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+
+		// Exact match
+		if pattern == host {
+			return true
+		}
+
+		// Suffix match (.example.com matches api.example.com)
+		if strings.HasPrefix(pattern, ".") && strings.HasSuffix(host, pattern) {
+			return true
+		}
+
+		// Domain match (example.com matches api.example.com)
+		if strings.HasSuffix(host, "."+pattern) {
+			return true
+		}
+
+		// Wildcard match (*) bypasses all
+		if pattern == "*" {
+			return true
+		}
+	}
+
 	return false
 }
