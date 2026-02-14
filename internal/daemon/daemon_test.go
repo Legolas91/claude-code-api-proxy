@@ -157,9 +157,95 @@ func TestCleanupOnExit(t *testing.T) {
 	}
 }
 
+// TestCleanupPIDIdempotence tests that cleanupPID can be called multiple times safely
+func TestCleanupPIDIdempotence(t *testing.T) {
+	// Write PID file
+	err := writePID()
+	if err != nil {
+		t.Fatalf("writePID failed: %v", err)
+	}
+
+	// First cleanup
+	cleanupPID()
+
+	// Verify removed
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Errorf("PID file not removed by first cleanup")
+	}
+
+	// Second cleanup should not panic or error
+	cleanupPID()
+
+	// Third cleanup for good measure
+	cleanupPID()
+}
+
+// TestPIDFilePermissions tests that PID file is created with appropriate permissions (v1.5.2+)
+func TestPIDFilePermissions(t *testing.T) {
+	defer os.Remove(pidFile)
+
+	err := writePID()
+	if err != nil {
+		t.Fatalf("writePID failed: %v", err)
+	}
+
+	info, err := os.Stat(pidFile)
+	if err != nil {
+		t.Fatalf("Failed to stat PID file: %v", err)
+	}
+
+	// Check file is readable and writable by owner
+	// Note: On some filesystems (FAT, NTFS via WSL), Unix permissions may not be fully enforced
+	// We verify the file exists and has expected mode on Unix-like systems
+	mode := info.Mode().Perm()
+	if mode&0400 == 0 {
+		t.Errorf("PID file should be readable by owner, got mode %o", mode)
+	}
+	if mode&0200 == 0 {
+		t.Errorf("PID file should be writable by owner, got mode %o", mode)
+	}
+}
+
+// TestIsProcessRunningWithZeroPID tests isProcessRunning with PID 0
+func TestIsProcessRunningWithZeroPID(t *testing.T) {
+	defer os.Remove(pidFile)
+
+	// Write PID 0
+	err := os.WriteFile(pidFile, []byte("0"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// isProcessRunning should return false (PID 0 is not valid)
+	if isProcessRunning() {
+		t.Errorf("isProcessRunning should return false for PID 0")
+	}
+}
+
+// TestIsProcessRunningWithNegativePID tests isProcessRunning with negative PID
+func TestIsProcessRunningWithNegativePID(t *testing.T) {
+	defer os.Remove(pidFile)
+
+	// Write negative PID
+	err := os.WriteFile(pidFile, []byte("-1"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// isProcessRunning should return false
+	if isProcessRunning() {
+		t.Errorf("isProcessRunning should return false for negative PID")
+	}
+}
+
 // TestIsProcessRunningWithCurrentPID tests that isProcessRunning detects current process
 func TestIsProcessRunningWithCurrentPID(t *testing.T) {
 	defer os.Remove(pidFile)
+
+	// Skip if proxy is already running (PID file conflict)
+	if IsRunning() {
+		t.Skip("Skipping TestIsProcessRunningWithCurrentPID: proxy already running")
+	}
 
 	// Write current PID
 	err := writePID()

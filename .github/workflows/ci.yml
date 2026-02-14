@@ -5,14 +5,12 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.23', '1.24']
 
     steps:
     - name: Checkout code
@@ -21,15 +19,15 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: '1.25'
 
     - name: Cache Go modules
       uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-v2-1.25-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-go-v2-1.25-
 
     - name: Download dependencies
       run: go mod download
@@ -39,7 +37,6 @@ jobs:
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4
-      if: matrix.go-version == '1.24'
       with:
         files: ./coverage.out
         flags: unittests
@@ -56,7 +53,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.25'
 
     - name: Build binary
       run: make build
@@ -75,7 +72,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.25'
 
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v8
