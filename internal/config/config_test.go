@@ -729,3 +729,124 @@ func TestMultipleEnvFiles(t *testing.T) {
 		t.Errorf("Expected local base URL, got %q", cfg.OpenAIBaseURL)
 	}
 }
+
+func TestGetProviderForTier(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         Config
+		tier        string
+		wantBaseURL string
+		wantAPIKey  string
+		wantModel   string
+	}{
+		{
+			name: "opus with specific config",
+			cfg: Config{
+				OpenAIBaseURL:   "https://default.com/v1",
+				OpenAIAPIKey:    "default-key",
+				OpusBaseURL:     "https://opus.com/v1",
+				OpusAPIKey:      "opus-key",
+				OpusModel:       "gpt-5",
+			},
+			tier:        "opus",
+			wantBaseURL: "https://opus.com/v1",
+			wantAPIKey:  "opus-key",
+			wantModel:   "gpt-5",
+		},
+		{
+			name: "opus fallback to default",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.com/v1",
+				OpenAIAPIKey:  "default-key",
+			},
+			tier:        "opus",
+			wantBaseURL: "https://default.com/v1",
+			wantAPIKey:  "default-key",
+			wantModel:   "",
+		},
+		{
+			name: "sonnet with specific URL but default key",
+			cfg: Config{
+				OpenAIBaseURL:   "https://default.com/v1",
+				OpenAIAPIKey:    "default-key",
+				SonnetBaseURL:   "https://sonnet.com/v1",
+				SonnetModel:     "codestral",
+			},
+			tier:        "sonnet",
+			wantBaseURL: "https://sonnet.com/v1",
+			wantAPIKey:  "default-key",
+			wantModel:   "codestral",
+		},
+		{
+			name: "haiku with specific key but default URL",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.com/v1",
+				OpenAIAPIKey:  "default-key",
+				HaikuAPIKey:   "haiku-key",
+				HaikuModel:    "qwen2.5",
+			},
+			tier:        "haiku",
+			wantBaseURL: "https://default.com/v1",
+			wantAPIKey:  "haiku-key",
+			wantModel:   "qwen2.5",
+		},
+		{
+			name: "all tiers with specific configs",
+			cfg: Config{
+				OpenAIBaseURL:   "https://default.com/v1",
+				OpenAIAPIKey:    "default-key",
+				OpusBaseURL:     "https://opus.com/v1",
+				OpusAPIKey:      "opus-key",
+				OpusModel:       "gpt-5",
+				SonnetBaseURL:   "https://sonnet.com/v1",
+				SonnetAPIKey:    "sonnet-key",
+				SonnetModel:     "codestral",
+				HaikuBaseURL:    "http://localhost:11434/v1",
+				HaikuAPIKey:     "ollama",
+				HaikuModel:      "qwen2.5",
+			},
+			tier:        "sonnet",
+			wantBaseURL: "https://sonnet.com/v1",
+			wantAPIKey:  "sonnet-key",
+			wantModel:   "codestral",
+		},
+		{
+			name: "unknown tier fallback",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.com/v1",
+				OpenAIAPIKey:  "default-key",
+			},
+			tier:        "unknown",
+			wantBaseURL: "https://default.com/v1",
+			wantAPIKey:  "default-key",
+			wantModel:   "",
+		},
+		{
+			name: "empty tier fallback",
+			cfg: Config{
+				OpenAIBaseURL: "https://default.com/v1",
+				OpenAIAPIKey:  "default-key",
+			},
+			tier:        "",
+			wantBaseURL: "https://default.com/v1",
+			wantAPIKey:  "default-key",
+			wantModel:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotBaseURL, gotAPIKey, gotModel := tt.cfg.GetProviderForTier(tt.tier)
+
+			if gotBaseURL != tt.wantBaseURL {
+				t.Errorf("GetProviderForTier(%q) baseURL = %q, want %q", tt.tier, gotBaseURL, tt.wantBaseURL)
+			}
+			if gotAPIKey != tt.wantAPIKey {
+				t.Errorf("GetProviderForTier(%q) apiKey = %q, want %q", tt.tier, gotAPIKey, tt.wantAPIKey)
+			}
+			if gotModel != tt.wantModel {
+				t.Errorf("GetProviderForTier(%q) model = %q, want %q", tt.tier, gotModel, tt.wantModel)
+			}
+		})
+	}
+}

@@ -65,6 +65,11 @@ type Config struct {
 	SonnetBaseURL string
 	HaikuBaseURL  string
 
+	// Per-tier API keys (optional, fallback to OpenAIAPIKey)
+	OpusAPIKey   string
+	SonnetAPIKey string
+	HaikuAPIKey  string
+
 	// Server settings
 	Host string
 	Port string
@@ -118,6 +123,11 @@ func Load() (*Config, error) {
 		OpusBaseURL:   os.Getenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL"),
 		SonnetBaseURL: os.Getenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL"),
 		HaikuBaseURL:  os.Getenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL"),
+
+		// Per-tier API keys (optional, fallback to OpenAIAPIKey)
+		OpusAPIKey:   os.Getenv("ANTHROPIC_DEFAULT_OPUS_API_KEY"),
+		SonnetAPIKey: os.Getenv("ANTHROPIC_DEFAULT_SONNET_API_KEY"),
+		HaikuAPIKey:  os.Getenv("ANTHROPIC_DEFAULT_HAIKU_API_KEY"),
 
 		// Server settings
 		Host: getEnvOrDefault("HOST", "0.0.0.0"),
@@ -191,6 +201,35 @@ func (c *Config) IsLocalhost() bool {
 	return strings.Contains(baseURL, "localhost") || strings.Contains(baseURL, "127.0.0.1")
 }
 
+// GetProviderForTier returns the provider configuration (baseURL, apiKey, model) for a given tier.
+// Falls back to default values (OpenAIBaseURL, OpenAIAPIKey) if tier-specific values are not set.
+// This enables optional multi-provider routing where different Claude tiers can use different APIs.
+func (c *Config) GetProviderForTier(tier string) (baseURL, apiKey, model string) {
+	switch tier {
+	case "opus":
+		baseURL = c.OpusBaseURL
+		apiKey = c.OpusAPIKey
+		model = c.OpusModel
+	case "sonnet":
+		baseURL = c.SonnetBaseURL
+		apiKey = c.SonnetAPIKey
+		model = c.SonnetModel
+	case "haiku":
+		baseURL = c.HaikuBaseURL
+		apiKey = c.HaikuAPIKey
+		model = c.HaikuModel
+	}
+
+	// Fallback to default values if tier-specific not set
+	if baseURL == "" {
+		baseURL = c.OpenAIBaseURL
+	}
+	if apiKey == "" {
+		apiKey = c.OpenAIAPIKey
+	}
+
+	return baseURL, apiKey, model
+}
 
 // GetModelCapabilities retrieves cached capabilities for a (provider, model) combination.
 // Returns nil if no capabilities are cached yet (first request for this model).

@@ -252,6 +252,38 @@ ANTHROPIC_DEFAULT_HAIKU_MODEL=google/gemini-2.5-flash
 ANTHROPIC_DEFAULT_OPUS_MODEL=openai/gpt-5
 ```
 
+**Optional - Multi-Provider Routing (v1.5.0+):**
+
+Route different Claude tiers to different backend providers with different API keys.
+
+- `ANTHROPIC_DEFAULT_OPUS_BASE_URL` - Base URL for opus tier (fallback: `OPENAI_BASE_URL`)
+- `ANTHROPIC_DEFAULT_OPUS_API_KEY` - API key for opus tier (fallback: `OPENAI_API_KEY`)
+- `ANTHROPIC_DEFAULT_SONNET_BASE_URL` - Base URL for sonnet tier (fallback: `OPENAI_BASE_URL`)
+- `ANTHROPIC_DEFAULT_SONNET_API_KEY` - API key for sonnet tier (fallback: `OPENAI_API_KEY`)
+- `ANTHROPIC_DEFAULT_HAIKU_BASE_URL` - Base URL for haiku tier (fallback: `OPENAI_BASE_URL`)
+- `ANTHROPIC_DEFAULT_HAIKU_API_KEY` - API key for haiku tier (fallback: `OPENAI_API_KEY`)
+
+Example - Multi-provider with cost optimization:
+```bash
+# Opus → OpenRouter (GPT-5 for complex reasoning)
+ANTHROPIC_DEFAULT_OPUS_BASE_URL=https://openrouter.ai/api/v1
+ANTHROPIC_DEFAULT_OPUS_API_KEY=sk-or-v1-xxx
+ANTHROPIC_DEFAULT_OPUS_MODEL=openai/gpt-5
+
+# Sonnet → Custom API (Specialized code model)
+ANTHROPIC_DEFAULT_SONNET_BASE_URL=https://api.provider.com/v1
+ANTHROPIC_DEFAULT_SONNET_API_KEY=sk-provider-yyy
+ANTHROPIC_DEFAULT_SONNET_MODEL=codestral-2508
+
+# Haiku → Ollama local (Free, offline)
+ANTHROPIC_DEFAULT_HAIKU_BASE_URL=http://localhost:11434/v1
+ANTHROPIC_DEFAULT_HAIKU_MODEL=qwen2.5:14b
+
+# Fallback for non-Claude models
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_KEY=sk-or-v1-xxx
+```
+
 **Optional - OpenRouter Specific:**
 - `OPENROUTER_APP_NAME` - App name for OpenRouter dashboard tracking
 - `OPENROUTER_APP_URL` - App URL for better rate limits (higher quotas)

@@ -66,6 +66,10 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		}
 	}
 
+	// Get provider configuration for this tier (multi-URL routing support)
+	tier := converter.GetTierFromModel(claudeReq.Model)
+	baseURL, apiKey, _ := cfg.GetProviderForTier(tier)
+
 	// Convert Claude request to OpenAI format
 	openaiReq, err := converter.ConvertRequest(claudeReq, cfg)
 	if err != nil {
@@ -101,14 +105,14 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 
 	// Handle streaming vs non-streaming
 	if openaiReq.Stream != nil && *openaiReq.Stream {
-		return handleStreamingMessages(c, openaiReq, claudeReq.Model, cfg)
+		return handleStreamingMessages(c, openaiReq, claudeReq.Model, cfg, baseURL, apiKey)
 	}
 
 	// Track timing for simple log
 	startTime := time.Now()
 
 	// Non-streaming response
-	openaiResp, err := callOpenAI(openaiReq, cfg)
+	openaiResp, err := callOpenAI(openaiReq, cfg, baseURL, apiKey)
 	if err != nil {
 		// Propagate the provider's HTTP status code when available
 		statusCode := 500
@@ -194,7 +198,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 // handleStreamingMessages handles streaming SSE responses from the provider.
 // It forwards the OpenAI request, receives streaming chunks, and converts them to
 // Claude's SSE event format in real-time using streamOpenAIToClaude.
-func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, claudeModel string, cfg *config.Config) error {
+func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, claudeModel string, cfg *config.Config, baseURL, apiKey string) error {
 	// Track timing for simple log
 	startTime := time.Now()
 
@@ -210,11 +214,11 @@ func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, clau
 		}
 
 		if cfg.Debug {
-			fmt.Printf("[DEBUG] StreamWriter: Making streaming request to %s\n", cfg.GetBaseURLForModel(openaiReq.Model)+"/chat/completions")
+			fmt.Printf("[DEBUG] StreamWriter: Making streaming request to %s\n", baseURL+"/chat/completions")
 		}
 
 		// Make streaming request with automatic retry logic
-		resp, err := callOpenAIStream(openaiReq, cfg)
+		resp, err := callOpenAIStream(openaiReq, cfg, baseURL, apiKey)
 		if err != nil {
 			if cfg.Debug {
 				fmt.Printf("[DEBUG] StreamWriter: Request failed: %v\n", err)
@@ -774,15 +778,15 @@ func cacheMaxCompletionTokensSupported(req *models.OpenAIRequest, cfg *config.Co
 
 // callOpenAI makes an HTTP request to the OpenAI API with automatic retry logic
 // for max_completion_tokens parameter errors. Uses per-model capability caching.
-func callOpenAI(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIResponse, error) {
-	resp, err := callOpenAIInternal(req, cfg)
+func callOpenAI(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey string) (*models.OpenAIResponse, error) {
+	resp, err := callOpenAIInternal(req, cfg, baseURL, apiKey)
 	if err != nil {
 		if isMaxTokensParameterError(err.Error()) {
 			if cfg.Debug {
 				fmt.Printf("[DEBUG] Detected max_completion_tokens parameter error for model %s, retrying without it\n", req.Model)
 			}
 			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
-			return callOpenAIInternal(&retryReq, cfg)
+			return callOpenAIInternal(&retryReq, cfg, baseURL, apiKey)
 		}
 		return nil, err
 	}
@@ -793,15 +797,15 @@ func callOpenAI(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIRe
 
 // callOpenAIStream makes a streaming HTTP request with retry logic for parameter errors.
 // Uses per-model capability caching.
-func callOpenAIStream(req *models.OpenAIRequest, cfg *config.Config) (*http.Response, error) {
-	resp, err := callOpenAIStreamInternal(req, cfg)
+func callOpenAIStream(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey string) (*http.Response, error) {
+	resp, err := callOpenAIStreamInternal(req, cfg, baseURL, apiKey)
 	if err != nil {
 		if isMaxTokensParameterError(err.Error()) {
 			if cfg.Debug {
 				fmt.Printf("[DEBUG] Detected max_completion_tokens parameter error in stream for model %s, retrying without it\n", req.Model)
 			}
 			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
-			return callOpenAIStreamInternal(&retryReq, cfg)
+			return callOpenAIStreamInternal(&retryReq, cfg, baseURL, apiKey)
 		}
 		return nil, err
 	}
@@ -813,13 +817,12 @@ func callOpenAIStream(req *models.OpenAIRequest, cfg *config.Config) (*http.Resp
 // makeOpenAIHTTPRequest builds and executes an HTTP request to the OpenAI API.
 // It handles JSON marshaling, header setup (auth, OpenRouter), and provider-specific logic.
 // The caller is responsible for closing the response body.
-func makeOpenAIHTTPRequest(req *models.OpenAIRequest, cfg *config.Config, timeout time.Duration) (*http.Response, error) {
+func makeOpenAIHTTPRequest(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey string, timeout time.Duration) (*http.Response, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	baseURL := cfg.GetBaseURLForModel(req.Model)
 	apiURL := baseURL + "/chat/completions"
 
 	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
@@ -830,8 +833,9 @@ func makeOpenAIHTTPRequest(req *models.OpenAIRequest, cfg *config.Config, timeou
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Skip auth for Ollama (localhost)
-	if !cfg.IsLocalhost() {
-		httpReq.Header.Set("Authorization", "Bearer "+cfg.OpenAIAPIKey)
+	isLocalhost := strings.Contains(strings.ToLower(baseURL), "localhost") || strings.Contains(strings.ToLower(baseURL), "127.0.0.1")
+	if !isLocalhost {
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	// OpenRouter-specific headers
@@ -870,8 +874,8 @@ func (e *providerError) Error() string {
 }
 
 // callOpenAIStreamInternal makes a streaming HTTP request without retry logic
-func callOpenAIStreamInternal(req *models.OpenAIRequest, cfg *config.Config) (*http.Response, error) {
-	return makeOpenAIHTTPRequest(req, cfg, 300*time.Second)
+func callOpenAIStreamInternal(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey string) (*http.Response, error) {
+	return makeOpenAIHTTPRequest(req, cfg, baseURL, apiKey, 300*time.Second)
 }
 
 // isMaxTokensParameterError checks if the error message indicates an unsupported
@@ -923,8 +927,8 @@ func prepareRetryWithoutMaxCompletionTokens(req *models.OpenAIRequest, cfg *conf
 }
 
 // callOpenAIInternal is the internal implementation without retry logic
-func callOpenAIInternal(req *models.OpenAIRequest, cfg *config.Config) (*models.OpenAIResponse, error) {
-	resp, err := makeOpenAIHTTPRequest(req, cfg, 90*time.Second)
+func callOpenAIInternal(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey string) (*models.OpenAIResponse, error) {
+	resp, err := makeOpenAIHTTPRequest(req, cfg, baseURL, apiKey, 90*time.Second)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-02-14
+
+### Added
+- **Per-tier API key support** - Configure different API keys for each Claude tier (Opus/Sonnet/Haiku)
+  - `ANTHROPIC_DEFAULT_OPUS_API_KEY` - API key for opus tier requests
+  - `ANTHROPIC_DEFAULT_SONNET_API_KEY` - API key for sonnet tier requests
+  - `ANTHROPIC_DEFAULT_HAIKU_API_KEY` - API key for haiku tier requests
+  - Falls back to `OPENAI_API_KEY` when tier-specific key is not configured
+  - Enables multi-provider routing with different authentication per tier
+- `GetProviderForTier(tier)` method on Config - Returns (baseURL, apiKey, model) for a given tier with automatic fallback
+- `GetTierFromModel(claudeModel)` function in converter - Extracts tier name from Claude model strings
+- 7 comprehensive unit tests for `GetProviderForTier()` covering all fallback scenarios
+- Support for hybrid configurations (mix tier-specific and fallback values)
+
+### Changed
+- `makeOpenAIHTTPRequest()` now accepts `baseURL` and `apiKey` as parameters instead of using `cfg.OpenAIBaseURL` and `cfg.OpenAIAPIKey` globally
+- `handleMessages()` extracts tier from Claude model and calls `GetProviderForTier()` to get appropriate config
+- `callOpenAI()`, `callOpenAIStream()`, `callOpenAIInternal()`, `callOpenAIStreamInternal()` all thread `baseURL` and `apiKey` parameters
+- `handleStreamingMessages()` accepts `baseURL` and `apiKey` parameters for per-tier routing
+- Localhost detection moved from `cfg.IsLocalhost()` to inline check in `makeOpenAIHTTPRequest()` using provided `baseURL`
+
+### Fixed
+- Variable name consistency: All tier-specific environment variables now use `ANTHROPIC_DEFAULT_*` prefix for consistency with model variables
+
 ## [1.4.0] - 2026-02-13
 
 ### Added

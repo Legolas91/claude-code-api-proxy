@@ -201,6 +201,24 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 // It routes haiku/sonnet/opus tiers to appropriate models (gpt-5-mini, gpt-5, etc.)
 // and allows environment variable overrides for routing to alternative providers like
 // Grok, Gemini, or DeepSeek. Non-Claude model names are passed through unchanged.
+// GetTierFromModel extracts the tier name (opus/sonnet/haiku) from a Claude model string.
+// Returns empty string for non-Claude models.
+func GetTierFromModel(claudeModel string) string {
+	modelLower := strings.ToLower(claudeModel)
+
+	if strings.Contains(modelLower, "haiku") {
+		return "haiku"
+	}
+	if strings.Contains(modelLower, "sonnet") {
+		return "sonnet"
+	}
+	if strings.Contains(modelLower, "opus") {
+		return "opus"
+	}
+
+	return ""
+}
+
 func mapModel(claudeModel string, cfg *config.Config) string {
 	modelLower := strings.ToLower(claudeModel)
 
