@@ -66,7 +66,7 @@ gh release create v1.2.0 \
 ```
 
 Or manually via GitHub UI:
-1. Go to https://github.com/nielspeter/claude-code-proxy/releases/new
+1. Go to https://github.com/Legolas91/claude-code-api-proxy/releases/new
 2. Select tag: `v1.2.0`
 3. Copy release notes from CHANGELOG.md
 4. Publish release

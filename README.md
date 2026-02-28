@@ -1,18 +1,11 @@
-# Claude Code Proxy (Go)
+# Claude Code API Proxy (Go)
 
-[![Latest Release](https://img.shields.io/github/v/release/nielspeter/claude-code-proxy?label=version)](https://github.com/nielspeter/claude-code-proxy/releases/latest)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/nielspeter/claude-code-proxy)](https://go.dev/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/nielspeter/claude-code-proxy/ci.yml?branch=main)](https://github.com/nielspeter/claude-code-proxy/actions)
-[![License](https://img.shields.io/github/license/nielspeter/claude-code-proxy)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/nielspeter/claude-code-proxy)](https://github.com/nielspeter/claude-code-proxy/issues)
 
-A lightweight HTTP proxy that enables Claude Code to work with OpenAI-compatible API providers including OpenRouter (200+ models), OpenAI Direct (GPT-5 reasoning), and Ollama (free local inference).
+> **Fork** of [nielspeter/claude-code-proxy](https://github.com/nielspeter/claude-code-proxy) — extended with per-tier multi-URL/multi-key routing, enterprise HTTP proxy support, adaptive model detection, and security fixes.
 
-> **⚠️ Early Stage / Beta Software**
->
-> This project is in active development and has limited production testing. While core functionality works, edge cases and some provider-specific features may have issues. Use with caution in production environments.
->
-> **Feedback welcome!** Please report issues at https://github.com/nielspeter/claude-code-proxy/issues
+`cc-api-proxy` translates Claude API requests into OpenAI-compatible format, enabling Claude Code to use any backend model — from OpenRouter and Ollama to corporate API gateways like Mammouth.ai. Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key, with full enterprise HTTP proxy support for air-gapped environments.
+
+> **⚠️ Beta Software** — Core functionality works. Edge cases may have issues. Feedback welcome at https://github.com/Legolas91/claude-code-api-proxy/issues
 
 ## Features
 
@@ -21,20 +14,28 @@ A lightweight HTTP proxy that enables Claude Code to work with OpenAI-compatible
   - Extended thinking blocks with proper hiding/showing
   - Streaming responses with real-time token tracking
   - Proper SSE event formatting
-- ✅ **Multiple Provider Support** - OpenRouter, OpenAI Direct, and Ollama
-  - **OpenRouter**: 200+ models (GPT, Grok, Gemini, etc.) through single API
+- ✅ **Any OpenAI-Compatible Provider** - Works with any provider out of the box
+  - **OpenRouter**: 200+ models (GPT, Grok, Gemini, Codestral, etc.)
   - **OpenAI Direct**: Native GPT-5 reasoning model support
-  - **Ollama**: Free local inference with DeepSeek-R1, Llama3, Qwen, etc.
+  - **Ollama**: Free local inference (DeepSeek-R1, Llama3, Qwen, etc.)
+  - **Custom providers**: Mammouth.ai, enterprise API gateways, any OpenAI-compatible endpoint
+- ✅ **Per-Tier Multi-URL/Multi-Key Routing** *(v1.5.0+)* - Route each Claude tier independently
+  - Different provider URL per tier (Opus/Sonnet/Haiku)
+  - Different API key per tier
+  - Automatic fallback to `OPENAI_BASE_URL` / `OPENAI_API_KEY`
+- ✅ **Enterprise HTTP Proxy Support** *(v1.5.5+)* - Corporate environment ready
+  - `CLAUDE_HTTP_PROXY` / `CLAUDE_HTTPS_PROXY` for outbound proxy
+  - `CLAUDE_NO_PROXY` bypass list with pattern matching
+  - System proxy auto-detection (`HTTP_PROXY` / `HTTPS_PROXY`)
 - ✅ **Adaptive Per-Model Detection** - Zero-config provider compatibility
   - Automatically learns which parameters each model supports
   - No hardcoded model patterns - works with any future model/provider
   - Per-model capability caching for instant subsequent requests
-- ✅ **Pattern-based routing** - Auto-detects Claude models and routes to appropriate backend models
+- ✅ **Pattern-based routing** - Auto-detects Claude model tier and routes to configured backend
 - ✅ **Zero dependencies** - Single ~10MB binary, no runtime needed
 - ✅ **Daemon mode** - Runs in background, serves multiple Claude Code sessions
 - ✅ **Fast startup** - < 10ms cold start
 - ✅ **Config flexibility** - Loads from `~/.claude/proxy.env` or `.env`
-- ✅ **Passthrough mode** - Optional direct proxying to Anthropic API for debugging
 
 ## Quick Start
 
@@ -93,7 +94,7 @@ ANTHROPIC_DEFAULT_SONNET_MODEL=x-ai/grok-code-fast-1
 ANTHROPIC_DEFAULT_HAIKU_MODEL=google/gemini-2.5-flash
 
 # Optional: Better rate limits
-OPENROUTER_APP_NAME=Claude-Code-Proxy
+OPENROUTER_APP_NAME=Claude-Code-API-Proxy
 OPENROUTER_APP_URL=https://github.com/yourname/repo
 EOF
 ```
@@ -227,6 +228,7 @@ make build-all
 # dist/cc-api-proxy-darwin-arm64
 # dist/cc-api-proxy-linux-amd64
 # dist/cc-api-proxy-linux-arm64
+# dist/cc-api-proxy-windows-amd64.exe
 ```
 
 ## Configuration Reference
@@ -284,6 +286,15 @@ OPENAI_BASE_URL=https://openrouter.ai/api/v1
 OPENAI_API_KEY=sk-or-v1-xxx
 ```
 
+**Optional - Enterprise HTTP Proxy (v1.5.5+):**
+
+Route outbound requests through a corporate HTTP/HTTPS proxy.
+
+- `CLAUDE_HTTP_PROXY` - HTTP proxy URL (e.g., `http://proxy.company.com:8080`)
+- `CLAUDE_HTTPS_PROXY` - HTTPS proxy URL
+- `CLAUDE_NO_PROXY` - Comma-separated list of hosts to bypass (e.g., `localhost,127.0.0.1,.internal`)
+- `CLAUDE_PROXY_FROM_ENV` - Use system `HTTP_PROXY`/`HTTPS_PROXY` env vars (default: `true`)
+
 **Optional - OpenRouter Specific:**
 - `OPENROUTER_APP_NAME` - App name for OpenRouter dashboard tracking
 - `OPENROUTER_APP_URL` - App URL for better rate limits (higher quotas)
@@ -301,7 +312,7 @@ OPENAI_API_KEY=sk-or-v1-xxx
 ## Project Structure
 
 ```
-proxy/
+claude-code-api-proxy/
 ├── cmd/
 │   └── cc-api-proxy/
 │       └── main.go           # Entry point

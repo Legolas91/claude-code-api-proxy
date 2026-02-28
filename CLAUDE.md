@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Claude Code Proxy is an HTTP proxy that translates Claude API requests to OpenAI-compatible format, enabling Claude Code to work with 200+ alternative models through OpenRouter, OpenAI Direct (o1/o3), and Ollama (local). The proxy runs as a daemon, performs bidirectional API format conversion, and maintains full Claude Code feature compatibility including tool calling, extended thinking blocks, and streaming.
+`cc-api-proxy` is an HTTP proxy that translates Claude API requests to OpenAI-compatible format, enabling Claude Code to work with any OpenAI-compatible backend — OpenRouter, OpenAI Direct, Ollama, Mammouth.ai, or any enterprise API gateway. Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key. The proxy runs as a daemon, performs bidirectional API format conversion, and maintains full Claude Code feature compatibility including tool calling, extended thinking blocks, and streaming.
 
 ## Build Commands
 
@@ -130,7 +130,7 @@ The proxy uses a fully adaptive system that automatically learns what parameters
 
 ```go
 type CacheKey struct {
-    BaseURL string  // Provider base URL (e.g., "https://gpt.erst.dk/api")
+    BaseURL string  // Provider base URL (e.g., "https://api.mammouth.ai/v1")
     Model   string  // Model name (e.g., "gpt-5")
 }
 

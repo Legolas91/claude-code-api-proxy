@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-02-28
+
+### Changed
+- Renamed source directory `cmd/claude-code-proxy/` to `cmd/cc-api-proxy/` to align with binary name
+- Makefile `CMD_PATH` now derived from `BINARY` name: `cmd/$(BINARY)/main.go`
+
+## [1.5.6] - 2026-02-28
+
+### Security
+- **Replace Fiber CORS with custom middleware** - Critical fix: previous CORS implementation allowed all origins unconditionally
+  - Custom middleware validates `Origin` header against allowed origins
+  - Restricts to `localhost` and `127.0.0.1` by default
+  - Proper `OPTIONS` preflight handling
+
+### Changed
+- Binary renamed from `claude-code-proxy` to `cc-api-proxy`
+- PID file: `/tmp/claude-code-proxy.pid` → `/tmp/cc-api-proxy.pid`
+- Log file: `/tmp/claude-code-proxy.log` → `/tmp/cc-api-proxy.log`
+- Legacy config path: `~/.claude-code-proxy` → `~/.cc-api-proxy`
+- All release assets now named `cc-api-proxy-*`
+
+## [1.5.5] - 2026-02-14
+
+### Added
+- **Enterprise HTTP proxy support** - Route outbound requests through corporate HTTP/HTTPS proxies
+  - `CLAUDE_HTTP_PROXY` - Custom HTTP proxy URL (overrides system `HTTP_PROXY`)
+  - `CLAUDE_HTTPS_PROXY` - Custom HTTPS proxy URL (overrides system `HTTPS_PROXY`)
+  - `CLAUDE_NO_PROXY` - Comma-separated bypass list (exact, `.suffix`, `suffix`, `*` patterns)
+  - `CLAUDE_PROXY_FROM_ENV` - Enable/disable system proxy auto-detection (default: `true`)
+- `Config.GetHTTPTransport()` - Creates `http.Transport` with proxy configuration
+- `shouldBypassProxy()` - NO_PROXY pattern matching (exact, domain suffix, wildcard)
+- 17 unit tests: `TestHTTPProxyConfiguration`, `TestGetHTTPTransport`, `TestShouldBypassProxy`
+
+### Changed
+- `makeOpenAIHTTPRequest()` now uses `cfg.GetHTTPTransport()` for all provider requests
+
+## [1.5.3] - 2026-02-14
+
+### Added
+- Enhanced daemon test coverage: 40% → 49%
+- Edge case tests for PID handling, concurrent operations, invalid PID file scenarios
+- `workflow_dispatch` trigger for manual CI runs
+
+### Fixed
+- GitHub Actions workflows updated to Go 1.25 (matching `go.mod` requirement)
+- CI cache key includes Go version to prevent cache corruption
+
+## [1.5.2] - 2026-02-14
+
+### Security
+- Fix G306: PID file permissions changed from `0644` to `0600` (owner-only read/write)
+- Fix G107/G304: Added `#nosec` with justifications for controlled localhost health check and PID file path
+
+### Fixed
+- `TestStart` now skips when proxy is already running on `localhost:8082` (prevents CI failures)
+
 ## [1.5.0] - 2026-02-14
 
 ### Added
@@ -265,5 +321,5 @@ This release embodies the project philosophy: "Support all provider quirks autom
 ---
 
 **Links:**
-- [v1.1.0 Release](https://github.com/nielspeter/claude-code-proxy/releases/tag/v1.1.0)
-- [v1.0.0 Release](https://github.com/nielspeter/claude-code-proxy/releases/tag/v1.0.0)
+- [v1.1.0 Release](https://github.com/Legolas91/claude-code-api-proxy/releases/tag/v1.1.0)
+- [v1.0.0 Release](https://github.com/Legolas91/claude-code-api-proxy/releases/tag/v1.0.0)
