@@ -1,7 +1,9 @@
 # Binaries (built artifacts, not source)
 # Note: Keep cmd/ directory tracked (source code)
 # Note: Keep scripts/ccp tracked (shell script wrapper)
+cc-api-proxy
 claude-code-proxy
+.claude-code-proxy/
 *.exe
 *.exe~
 *.dll
