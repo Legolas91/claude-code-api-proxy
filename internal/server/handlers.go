@@ -16,6 +16,43 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// redactSensitiveData removes or truncates sensitive fields from request/response bodies
+// to prevent API keys, credentials, and large prompts from being logged.
+func redactSensitiveData(body []byte) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return "[invalid JSON]"
+	}
+
+	// Redact sensitive authentication fields
+	sensitiveFields := []string{"api_key", "x-api-key", "authorization", "bearer", "token"}
+	for _, field := range sensitiveFields {
+		if _, ok := data[field]; ok {
+			data[field] = "[REDACTED]"
+		}
+	}
+
+	// Truncate long system prompts (keep first 200 chars for debugging)
+	if system, ok := data["system"].(string); ok && len(system) > 200 {
+		data["system"] = system[:200] + "... [TRUNCATED " + fmt.Sprintf("%d", len(system)-200) + " chars]"
+	}
+
+	// Truncate long message arrays (keep structure but limit content)
+	if messages, ok := data["messages"].([]interface{}); ok && len(messages) > 3 {
+		truncatedMessages := make([]interface{}, 3)
+		copy(truncatedMessages, messages[:3])
+		data["messages"] = append(truncatedMessages, map[string]string{
+			"note": fmt.Sprintf("[%d more messages truncated]", len(messages)-3),
+		})
+	}
+
+	redacted, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return "[error redacting data]"
+	}
+	return string(redacted)
+}
+
 // addOpenRouterHeaders adds OpenRouter-specific HTTP headers for better rate limits.
 // Sets HTTP-Referer and X-Title headers when configured, which helps with OpenRouter's
 // rate limiting and usage tracking.
@@ -32,17 +69,17 @@ func addOpenRouterHeaders(req *http.Request, cfg *config.Config) {
 // It parses Claude requests, converts them to OpenAI format, and routes to either
 // streaming or non-streaming handlers based on the request's stream parameter.
 func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
-	// Debug: Log raw request
+	// Debug: Log request (with sensitive data redacted)
 	if cfg.Debug {
-		fmt.Printf("\n=== CLAUDE REQUEST ===\n%s\n===================\n", string(c.Body()))
+		fmt.Printf("\n=== CLAUDE REQUEST (redacted) ===\n%s\n==================================\n", redactSensitiveData(c.Body()))
 	}
 
 	// Parse Claude request
 	var claudeReq models.ClaudeRequest
 	if err := c.BodyParser(&claudeReq); err != nil {
-		// Log the error and raw body for debugging
+		// Log the error with redacted body for debugging
 		fmt.Printf("[ERROR] Failed to parse request body: %v\n", err)
-		fmt.Printf("[ERROR] Raw body: %s\n", string(c.Body()))
+		fmt.Printf("[ERROR] Raw body (redacted): %s\n", redactSensitiveData(c.Body()))
 		return c.Status(400).JSON(fiber.Map{
 			"type": "error",
 			"error": fiber.Map{
@@ -50,6 +87,51 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 				"message": fmt.Sprintf("Invalid request body: %v", err),
 			},
 		})
+	}
+
+	// Validate required fields
+	if claudeReq.Model == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"type": "error",
+			"error": fiber.Map{
+				"type":    "invalid_request_error",
+				"message": "Missing required field: model",
+			},
+		})
+	}
+
+	if len(claudeReq.Messages) == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"type": "error",
+			"error": fiber.Map{
+				"type":    "invalid_request_error",
+				"message": "Missing required field: messages (must contain at least 1 message)",
+			},
+		})
+	}
+
+	// Validate field ranges
+	if claudeReq.MaxTokens < 0 || claudeReq.MaxTokens > 200000 {
+		return c.Status(400).JSON(fiber.Map{
+			"type": "error",
+			"error": fiber.Map{
+				"type":    "invalid_request_error",
+				"message": "max_tokens must be between 0 and 200000",
+			},
+		})
+	}
+
+	if claudeReq.Temperature != nil {
+		temp := *claudeReq.Temperature
+		if temp < 0.0 || temp > 2.0 {
+			return c.Status(400).JSON(fiber.Map{
+				"type": "error",
+				"error": fiber.Map{
+					"type":    "invalid_request_error",
+					"message": "temperature must be between 0.0 and 2.0",
+				},
+			})
+		}
 	}
 
 	// Validate API key (if configured)

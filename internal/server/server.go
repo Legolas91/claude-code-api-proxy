@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/claude-code-proxy/proxy/internal/config"
@@ -18,7 +19,6 @@ import (
 	"github.com/claude-code-proxy/proxy/internal/daemon"
 	"github.com/claude-code-proxy/proxy/internal/version"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
@@ -33,11 +33,48 @@ func Start(cfg *config.Config) error {
 
 	// Middleware
 	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "*",
-	}))
+
+	// Custom CORS middleware - restrictive security policy
+	// Only allows localhost origins to prevent cross-origin API key exfiltration
+	app.Use(func(c *fiber.Ctx) error {
+		origin := c.Get("Origin")
+
+		// If no Origin header, allow (same-origin request)
+		if origin == "" {
+			return c.Next()
+		}
+
+		// Check if origin is localhost
+		isLocalhost := strings.HasPrefix(origin, "http://localhost:") ||
+			strings.HasPrefix(origin, "https://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			strings.HasPrefix(origin, "https://127.0.0.1:")
+
+		// Preflight OPTIONS request
+		if c.Method() == "OPTIONS" {
+			if !isLocalhost {
+				return c.Status(403).JSON(fiber.Map{
+					"error": "CORS: Origin not allowed",
+				})
+			}
+			c.Set("Access-Control-Allow-Origin", origin)
+			c.Set("Access-Control-Allow-Methods", "POST")
+			c.Set("Access-Control-Allow-Headers", "Content-Type,x-api-key")
+			c.Set("Access-Control-Max-Age", "3600")
+			return c.SendStatus(204)
+		}
+
+		// Actual request
+		if !isLocalhost {
+			return c.Status(403).JSON(fiber.Map{
+				"error": "CORS: Origin not allowed",
+			})
+		}
+
+		c.Set("Access-Control-Allow-Origin", origin)
+		c.Set("Vary", "Origin")
+		return c.Next()
+	})
 
 	// Enable HTTP logging only when simple log mode is enabled
 	if cfg.SimpleLog {
@@ -144,14 +181,35 @@ func getHaikuModel(cfg *config.Config) string {
 	return converter.DefaultHaikuModel + " (pattern-based)"
 }
 
+// limitBodySize returns a middleware that enforces a maximum request body size.
+// This prevents memory exhaustion attacks via oversized payloads.
+func limitBodySize(maxSize int) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if len(c.Body()) > maxSize {
+			return c.Status(413).JSON(fiber.Map{
+				"type": "error",
+				"error": fiber.Map{
+					"type":    "request_too_large",
+					"message": fmt.Sprintf("Request body exceeds maximum size of %d bytes (%.1f MB)", maxSize, float64(maxSize)/(1024*1024)),
+				},
+			})
+		}
+		return c.Next()
+	}
+}
+
 func setupClaudeEndpoints(app *fiber.App, cfg *config.Config) {
+	// Body size limit: 10MB for messages, 1MB for token counting
+	const maxMessageBodySize = 10 * 1024 * 1024 // 10MB
+	const maxTokenCountBodySize = 1 * 1024 * 1024 // 1MB
+
 	// Messages endpoint - main Claude API
-	app.Post("/v1/messages", func(c *fiber.Ctx) error {
+	app.Post("/v1/messages", limitBodySize(maxMessageBodySize), func(c *fiber.Ctx) error {
 		return handleMessages(c, cfg)
 	})
 
 	// Token counting endpoint
-	app.Post("/v1/messages/count_tokens", func(c *fiber.Ctx) error {
+	app.Post("/v1/messages/count_tokens", limitBodySize(maxTokenCountBodySize), func(c *fiber.Ctx) error {
 		return handleCountTokens(c, cfg)
 	})
 }

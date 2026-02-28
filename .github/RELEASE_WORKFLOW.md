@@ -1,6 +1,6 @@
 # Release Workflow Guide
 
-This guide explains how to create releases for claude-code-proxy.
+This guide explains how to create releases for cc-api-proxy.
 
 ## Files Created
 
@@ -179,7 +179,7 @@ gh release create v1.2.0 \
 ```
 
 Or use the GitHub web interface:
-1. Go to: https://github.com/nielspeter/claude-code-proxy/releases/new
+1. Go to: https://github.com/nielspeter/cc-api-proxy/releases/new
 2. Choose tag: `v1.2.0`
 3. Copy content from CHANGELOG.md for that version
 4. Upload binaries from `dist/` folder

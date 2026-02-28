@@ -60,7 +60,7 @@ make build
 make install
 
 # This installs:
-#   - claude-code-proxy (main binary)
+#   - cc-api-proxy (main binary)
 #   - ccp (wrapper script for easy usage)
 ```
 
@@ -68,14 +68,14 @@ make install
 
 ```bash
 # Copy binary to PATH
-sudo cp claude-code-proxy /usr/local/bin/
+sudo cp cc-api-proxy /usr/local/bin/
 
 # Copy wrapper script (optional but recommended)
 sudo cp scripts/ccp /usr/local/bin/
 sudo chmod +x /usr/local/bin/ccp
 ```
 
-After installation, `claude-code-proxy` and `ccp` will be available system-wide.
+After installation, `cc-api-proxy` and `ccp` will be available system-wide.
 
 ### Configuration
 
@@ -143,11 +143,11 @@ EOF
 **Commands:**
 
 ```bash
-./claude-code-proxy              # Start daemon
-./claude-code-proxy status       # Check if running
-./claude-code-proxy stop         # Stop daemon
-./claude-code-proxy version      # Show version
-./claude-code-proxy help         # Show help
+./cc-api-proxy              # Start daemon
+./cc-api-proxy status       # Check if running
+./cc-api-proxy stop         # Stop daemon
+./cc-api-proxy version      # Show version
+./cc-api-proxy help         # Show help
 ```
 
 **Flags:**
@@ -161,13 +161,13 @@ EOF
 
 ```bash
 # Start with debug logging
-./claude-code-proxy -d
+./cc-api-proxy -d
 
 # Start with simple one-line summaries
-./claude-code-proxy -s
+./cc-api-proxy -s
 
 # Combine flags
-./claude-code-proxy -d -s
+./cc-api-proxy -d -s
 ```
 
 **Option 1: Use ccp wrapper (recommended)**
@@ -192,7 +192,7 @@ The `ccp` wrapper automatically:
 
 ```bash
 # Start the proxy
-./claude-code-proxy
+./cc-api-proxy
 
 # Configure Claude Code to use the proxy
 export ANTHROPIC_BASE_URL=http://localhost:8082
@@ -223,10 +223,10 @@ ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-5-mini
 make build-all
 
 # Output:
-# dist/claude-code-proxy-darwin-amd64
-# dist/claude-code-proxy-darwin-arm64
-# dist/claude-code-proxy-linux-amd64
-# dist/claude-code-proxy-linux-arm64
+# dist/cc-api-proxy-darwin-amd64
+# dist/cc-api-proxy-darwin-arm64
+# dist/cc-api-proxy-linux-amd64
+# dist/cc-api-proxy-linux-arm64
 ```
 
 ## Configuration Reference
@@ -303,7 +303,7 @@ OPENAI_API_KEY=sk-or-v1-xxx
 ```
 proxy/
 ├── cmd/
-│   └── claude-code-proxy/
+│   └── cc-api-proxy/
 │       └── main.go           # Entry point
 ├── internal/
 │   ├── config/               # Config loading
@@ -388,7 +388,7 @@ Test the proxy with Claude Code CLI:
 
 ```bash
 # Start proxy in background
-./claude-code-proxy -s &
+./cc-api-proxy -s &
 
 # Test with different model tiers
 ANTHROPIC_BASE_URL=http://localhost:8082 claude --model opus -p "hi"
@@ -396,11 +396,11 @@ ANTHROPIC_BASE_URL=http://localhost:8082 claude --model sonnet -p "hi"
 ANTHROPIC_BASE_URL=http://localhost:8082 claude --model haiku -p "hi"
 
 # Check proxy logs
-./claude-code-proxy status
-tail -f /tmp/claude-code-proxy.log
+./cc-api-proxy status
+tail -f /tmp/cc-api-proxy.log
 
 # Stop proxy
-./claude-code-proxy stop
+./cc-api-proxy stop
 ```
 
 See [CLAUDE.md](CLAUDE.md#manual-testing) for detailed testing instructions including tool calling, streaming, and provider-specific tests.
@@ -494,7 +494,7 @@ When using OpenWebUI (which has a quirk with `max_completion_tokens`):
 Enable debug mode to see cache activity:
 
 ```bash
-./claude-code-proxy -d -s
+./cc-api-proxy -d -s
 
 # Logs show:
 # [DEBUG] Cache MISS: gpt-5 → will auto-detect (try max_completion_tokens)

@@ -36,7 +36,7 @@ var (
 // incorrectly identifying itself as a Claude model.
 func sanitizeSystemPrompt(systemText string, providerModel string) string {
 	// Replace main identity line
-	replacement := fmt.Sprintf("You are powered by the model %s via claude-code-proxy.", providerModel)
+	replacement := fmt.Sprintf("You are powered by the model %s via cc-api-proxy.", providerModel)
 	result := reModelIdentity.ReplaceAllString(systemText, replacement)
 	// Remove model family listing and fast mode info (both leak Claude model names)
 	result = reModelFamily.ReplaceAllString(result, "")

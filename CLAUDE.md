@@ -10,7 +10,7 @@ Claude Code Proxy is an HTTP proxy that translates Claude API requests to OpenAI
 
 ```bash
 # Build the binary
-go build -o claude-code-proxy cmd/claude-code-proxy/main.go
+go build -o cc-api-proxy cmd/claude-code-proxy/main.go
 # Or use make
 make build
 
@@ -33,7 +33,7 @@ make test-coverage
 go fmt ./...
 
 # Compile and start proxy in simple log mode
-go build -o claude-code-proxy cmd/claude-code-proxy/main.go && ./claude-code-proxy -s
+go build -o cc-api-proxy cmd/claude-code-proxy/main.go && ./cc-api-proxy -s
 ```
 
 ## Architecture
@@ -166,7 +166,7 @@ func isMaxTokensParameterError(errorMessage string) bool {
 Start proxy with `-d` flag to see cache activity:
 
 ```bash
-./claude-code-proxy -d -s
+./cc-api-proxy -d -s
 
 # Console output shows:
 [DEBUG] Cache MISS: gpt-5 → will auto-detect (try max_completion_tokens)
@@ -195,7 +195,7 @@ Start proxy with `-d` flag to see cache activity:
 Config loading priority (see `internal/config/config.go`):
 1. `./.env` (local project override)
 2. `~/.claude/proxy.env` (recommended location)
-3. `~/.claude-code-proxy` (legacy location)
+3. `~/.cc-api-proxy` (legacy location)
 
 Uses `godotenv.Overload()` to allow later files to override earlier ones.
 
@@ -277,16 +277,16 @@ To manually test the proxy with Claude Code CLI:
 
 ```bash
 # Build first
-go build -o claude-code-proxy cmd/claude-code-proxy/main.go
+go build -o cc-api-proxy cmd/claude-code-proxy/main.go
 
 # Start in simple log mode (recommended for testing)
-./claude-code-proxy -s &
+./cc-api-proxy -s &
 
 # Or with debug logging
-./claude-code-proxy -d &
+./cc-api-proxy -d &
 
 # Check it's running
-./claude-code-proxy status
+./cc-api-proxy status
 ```
 
 ### 2. Test with different Claude model tiers
@@ -313,7 +313,7 @@ Check the proxy logs to see which backend model was used:
 # [REQ] https://openrouter.ai/api/v1 model=openai/gpt-5 in=20 out=5 tok/s=25.3
 
 # Debug mode shows full request/response JSON
-tail -f /tmp/claude-code-proxy.log
+tail -f /tmp/cc-api-proxy.log
 ```
 
 ### 4. Test tool calling
@@ -340,7 +340,7 @@ ANTHROPIC_BASE_URL=http://localhost:8082 claude --model sonnet -p "solve: 2x + 5
 ### 6. Stop the proxy
 
 ```bash
-./claude-code-proxy stop
+./cc-api-proxy stop
 ```
 
 ### Testing Different Providers
@@ -353,7 +353,7 @@ OPENAI_API_KEY=sk-or-v1-...
 ANTHROPIC_DEFAULT_SONNET_MODEL=openai/gpt-5
 
 # Test
-./claude-code-proxy -s &
+./cc-api-proxy -s &
 ANTHROPIC_BASE_URL=http://localhost:8082 claude --model sonnet -p "hi"
 ```
 
@@ -377,7 +377,7 @@ ANTHROPIC_DEFAULT_SONNET_MODEL=qwen2.5:14b
 ollama serve &
 
 # Test proxy
-./claude-code-proxy -s &
+./cc-api-proxy -s &
 ANTHROPIC_BASE_URL=http://localhost:8082 claude --model sonnet -p "hi"
 ```
 
@@ -412,10 +412,10 @@ Token extraction requires `float64 → int` conversion because JSON unmarshals n
 ## Daemon Process
 
 The proxy runs as a background daemon (see `internal/daemon/daemon.go`):
-- Creates PID file at `/tmp/claude-code-proxy.pid`
-- Redirects stdout/stderr to `/tmp/claude-code-proxy.log`
-- `./claude-code-proxy status` checks if process is running
-- `./claude-code-proxy stop` kills the daemon via PID file
+- Creates PID file at `/tmp/cc-api-proxy.pid`
+- Redirects stdout/stderr to `/tmp/cc-api-proxy.log`
+- `./cc-api-proxy status` checks if process is running
+- `./cc-api-proxy stop` kills the daemon via PID file
 
 When testing locally, use `-d` flag for debug logging to see full requests/responses.
 

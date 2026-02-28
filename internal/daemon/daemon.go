@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	pidFile   = filepath.Join(os.TempDir(), "claude-code-proxy.pid")
+	pidFile   = filepath.Join(os.TempDir(), "cc-api-proxy.pid")
 	healthURL = "http://localhost:8082/health"
 )
 

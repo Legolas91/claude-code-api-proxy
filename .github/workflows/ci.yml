@@ -59,7 +59,7 @@ jobs:
       run: make build
 
     - name: Verify binary
-      run: ./claude-code-proxy --version || ./claude-code-proxy --help
+      run: ./cc-api-proxy --version || ./cc-api-proxy --help
 
   lint:
     name: Lint

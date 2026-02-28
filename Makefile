@@ -1,8 +1,8 @@
 .PHONY: build run clean test fmt lint build-all install
 
-# Binary name
-BINARY=claude-code-proxy
-CMD_PATH=cmd/$(BINARY)/main.go
+# Binary name (output) and source path (Go module internal path, unchanged)
+BINARY=cc-api-proxy
+CMD_PATH=cmd/claude-code-proxy/main.go
 
 # Build directory
 BUILD_DIR=dist
@@ -110,4 +110,4 @@ install: build
 	@echo "📋 Next steps:"
 	@echo "  1. Create config: mkdir -p ~/.claude && cp .env.example ~/.claude/proxy.env"
 	@echo "  2. Edit config: nano ~/.claude/proxy.env"
-	@echo "  3. Run: ccp chat (or claude-code-proxy)"
+	@echo "  3. Run: ccp chat (or cc-api-proxy)"

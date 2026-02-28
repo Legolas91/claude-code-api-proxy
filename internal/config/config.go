@@ -1,6 +1,6 @@
 // Package config handles configuration loading from environment variables and .env files.
 //
-// It supports multiple config file locations (./.env, ~/.claude/proxy.env, ~/.claude-code-proxy)
+// It supports multiple config file locations (./.env, ~/.claude/proxy.env, ~/.cc-api-proxy)
 // and detects the provider type (OpenRouter, OpenAI, Ollama) based on the OPENAI_BASE_URL.
 // The package also handles model overrides for routing Claude model names to alternative providers.
 package config
@@ -98,13 +98,13 @@ type Config struct {
 }
 
 // Load reads configuration from environment variables
-// Tries multiple locations: ./.env, ~/.claude/proxy.env, ~/.claude-code-proxy
+// Tries multiple locations: ./.env, ~/.claude/proxy.env, ~/.cc-api-proxy
 func Load() (*Config, error) {
 	// Try loading .env files in priority order
 	locations := []string{
 		".env",
 		filepath.Join(os.Getenv("HOME"), ".claude", "proxy.env"),
-		filepath.Join(os.Getenv("HOME"), ".claude-code-proxy"),
+		filepath.Join(os.Getenv("HOME"), ".cc-api-proxy"),
 	}
 
 	for _, loc := range locations {

@@ -90,19 +90,19 @@ func TestSanitizeSystemPrompt(t *testing.T) {
 			name:          "replaces Opus identity",
 			systemText:    "Some instructions. You are powered by the model named Opus 4.6. The exact model ID is claude-opus-4-6. More instructions.",
 			providerModel: "codestral-2508",
-			expected:      "Some instructions. You are powered by the model codestral-2508 via claude-code-proxy. More instructions.",
+			expected:      "Some instructions. You are powered by the model codestral-2508 via cc-api-proxy. More instructions.",
 		},
 		{
 			name:          "replaces Sonnet identity",
 			systemText:    "You are powered by the model named Sonnet 4.5. The exact model ID is claude-sonnet-4-5-20250929. Be helpful.",
 			providerModel: "mistral-small-3.2-24b-instruct",
-			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via claude-code-proxy. Be helpful.",
+			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via cc-api-proxy. Be helpful.",
 		},
 		{
 			name:          "replaces Haiku identity",
 			systemText:    "You are powered by the model named Haiku 4.5. The exact model ID is claude-haiku-4-5-20251001. Done.",
 			providerModel: "mistral-small-3.2-24b-instruct",
-			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via claude-code-proxy. Done.",
+			expected:      "You are powered by the model mistral-small-3.2-24b-instruct via cc-api-proxy. Done.",
 		},
 		{
 			name:          "removes model family listing",
@@ -120,7 +120,7 @@ func TestSanitizeSystemPrompt(t *testing.T) {
 			name:          "sanitizes all patterns together",
 			systemText:    "You are powered by the model named Opus 4.6. The exact model ID is claude-opus-4-6. The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: 'claude-opus-4-6'. When building AI applications, default to the latest and most capable Claude models. <fast_mode_info>\nClaude Opus 4.6\n</fast_mode_info>",
 			providerModel: "mistral-medium-3.1",
-			expected:      "You are powered by the model mistral-medium-3.1 via claude-code-proxy.  ",
+			expected:      "You are powered by the model mistral-medium-3.1 via cc-api-proxy.  ",
 		},
 		{
 			name:          "no match leaves text unchanged",
