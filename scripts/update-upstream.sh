@@ -80,7 +80,7 @@ fi
 # Build check
 echo ""
 echo "Building..."
-if ! go build -o /dev/null cmd/claude-code-proxy/main.go; then
+if ! go build -o /dev/null cmd/cc-api-proxy/main.go; then
     echo -e "${RED}Build failed!${NC}"
     git checkout "$CURRENT_BRANCH"
     git branch -D "$TEST_BRANCH"

@@ -45,7 +45,7 @@ A lightweight HTTP proxy that enables Claude Code to work with OpenAI-compatible
 go mod download
 
 # Build binary
-go build -o claude-code-proxy cmd/claude-code-proxy/main.go
+go build -o cc-api-proxy cmd/cc-api-proxy/main.go
 
 # Or use make
 make build
@@ -348,7 +348,7 @@ The proxy fully supports all Claude Code features:
 
 ```bash
 # Run in dev mode
-go run cmd/claude-code-proxy/main.go
+go run cmd/cc-api-proxy/main.go
 
 # Run tests
 go test ./...
