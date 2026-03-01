@@ -520,4 +520,4 @@ Enable debug mode to see cache activity:
 
 ## License
 
-MIT
+[MIT License](LICENSE)
