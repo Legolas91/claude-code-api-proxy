@@ -13,10 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--help` and `version` command** - Displayed old binary name `claude-code-proxy` instead of `cc-api-proxy`
 - **`.env.example`** - Legacy config path referenced `~/.claude-code-proxy` instead of `~/.cc-api-proxy`
 - **`.env.example`** - OpenRouter app URL referenced `claude-code-proxy` repository instead of `claude-code-api-proxy`
+- **`scripts/ccp`** - Wrapper script referenced old `claude-code-proxy` binary name instead of `cc-api-proxy`
+- **`Makefile`** - Version not injected at build time (`--version` displayed `dev`); fixed via `git describe --tags`
+- **`release.yml`** - Heredoc `<< 'EOF'` prevented `${VERSION}` expansion in release notes installation instructions
 
 ### Added
 - **`.env.example`** - New "Per-Tier Routing (v1.5.0+)" section documenting all 9 tier-specific variables (`_BASE_URL`, `_API_KEY`, `_MODEL` for Opus/Sonnet/Haiku)
 - **`CLAUDE.md`** - New "Per-Tier Routing (v1.5.0+)" section in Configuration System documenting `GetProviderForTier()` and all tier-specific variables
+- **`CONTRIBUTING.md`** - Single-maintainer policy (no PRs accepted, issues welcome)
+- **`SECURITY.md`** - Vulnerability reporting policy via GitHub Security Advisories
+- **`.gitignore`** - Added `*.pem`, `*.key`, `*.crt`, `*.p12`, `*.pfx` to prevent accidental certificate commits
+- **README badges** - Release version, Go version, CI status, License, Issues
+
+### Changed
+- Repository is now **public** on GitHub (`Legolas91/claude-code-api-proxy`)
 
 ## [1.5.7] - 2026-02-28
 
