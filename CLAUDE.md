@@ -199,6 +199,29 @@ Config loading priority (see `internal/config/config.go`):
 
 Uses `godotenv.Overload()` to allow later files to override earlier ones.
 
+### Per-Tier Routing (v1.5.0+)
+
+Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key. If a tier-specific variable is not set, it falls back to `OPENAI_BASE_URL` / `OPENAI_API_KEY`.
+
+```bash
+# Tier-specific base URL (v1.4.0+)
+ANTHROPIC_DEFAULT_OPUS_BASE_URL=https://openrouter.ai/api/v1
+ANTHROPIC_DEFAULT_SONNET_BASE_URL=https://api.mammouth.ai/v1
+ANTHROPIC_DEFAULT_HAIKU_BASE_URL=http://localhost:11434/v1
+
+# Tier-specific API key (v1.5.0+)
+ANTHROPIC_DEFAULT_OPUS_API_KEY=sk-or-v1-...
+ANTHROPIC_DEFAULT_SONNET_API_KEY=sk-mmai-...
+ANTHROPIC_DEFAULT_HAIKU_API_KEY=  # not needed for Ollama
+
+# Tier-specific model override
+ANTHROPIC_DEFAULT_OPUS_MODEL=openai/gpt-5
+ANTHROPIC_DEFAULT_SONNET_MODEL=codestral-2508
+ANTHROPIC_DEFAULT_HAIKU_MODEL=llama3.1:8b
+```
+
+Routing logic is implemented in `config.GetProviderForTier(tier)` which returns `(baseURL, apiKey, model)` with automatic fallback.
+
 Provider detection via URL pattern matching in `DetectProvider()`:
 - Contains `openrouter.ai` → ProviderOpenRouter
 - Contains `api.openai.com` → ProviderOpenAI

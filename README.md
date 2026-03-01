@@ -1,9 +1,14 @@
 # Claude Code API Proxy (Go)
 
+[![Latest Release](https://img.shields.io/github/v/release/Legolas91/claude-code-api-proxy)](https://github.com/Legolas91/claude-code-api-proxy/releases/latest)
+[![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://go.dev/doc/go1.25)
+[![CI](https://img.shields.io/github/actions/workflow/status/Legolas91/claude-code-api-proxy/ci.yml?branch=main)](https://github.com/Legolas91/claude-code-api-proxy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/Legolas91/claude-code-api-proxy)](LICENSE)
+[![Issues](https://img.shields.io/github/issues/Legolas91/claude-code-api-proxy)](https://github.com/Legolas91/claude-code-api-proxy/issues)
 
 > **Fork** of [nielspeter/claude-code-proxy](https://github.com/nielspeter/claude-code-proxy) — extended with per-tier multi-URL/multi-key routing, enterprise HTTP proxy support, adaptive model detection, and security fixes.
 
-`cc-api-proxy` translates Claude API requests into OpenAI-compatible format, enabling Claude Code to use any backend model — from OpenRouter and Ollama to corporate API gateways like Mammouth.ai. Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key, with full enterprise HTTP proxy support for air-gapped environments.
+`cc-api-proxy` translates Claude API requests into OpenAI-compatible format, enabling Claude Code to work with any OpenAI-compatible backend. Designed for enterprises operating in air-gapped environments or where access to public LLMs is restricted — primarily for use with models running on internal infrastructure — it also supports public providers such as OpenRouter, Ollama, Mammouth.ai, etc. Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key.
 
 > **⚠️ Beta Software** — Core functionality works. Edge cases may have issues. Feedback welcome at https://github.com/Legolas91/claude-code-api-proxy/issues
 
