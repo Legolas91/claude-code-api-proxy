@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-03-01
+
+### Fixed
+- **`--help` and `version` command** - Displayed old binary name `claude-code-proxy` instead of `cc-api-proxy`
+- **`.env.example`** - Legacy config path referenced `~/.claude-code-proxy` instead of `~/.cc-api-proxy`
+- **`.env.example`** - OpenRouter app URL referenced `claude-code-proxy` repository instead of `claude-code-api-proxy`
+
+### Added
+- **`.env.example`** - New "Per-Tier Routing (v1.5.0+)" section documenting all 9 tier-specific variables (`_BASE_URL`, `_API_KEY`, `_MODEL` for Opus/Sonnet/Haiku)
+- **`CLAUDE.md`** - New "Per-Tier Routing (v1.5.0+)" section in Configuration System documenting `GetProviderForTier()` and all tier-specific variables
+
 ## [1.5.7] - 2026-02-28
 
 ### Changed

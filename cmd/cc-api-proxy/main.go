@@ -38,7 +38,7 @@ func main() {
 			daemon.Status()
 			return
 		case "version":
-			fmt.Printf("claude-code-proxy %s\n", version.Version)
+			fmt.Printf("cc-api-proxy %s\n", version.Version)
 			return
 		case "help", "-h", "--help":
 			printHelp()
@@ -88,14 +88,14 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println(`Claude Code Proxy - OpenAI API proxy for Claude Code
+	fmt.Println(`cc-api-proxy - OpenAI-compatible API proxy for Claude Code
 
 Usage:
-  claude-code-proxy [-d|--debug] [-s|--simple]  Start the proxy daemon
-  claude-code-proxy stop                        Stop the proxy daemon
-  claude-code-proxy status                      Check if proxy is running
-  claude-code-proxy version                     Show version
-  claude-code-proxy help                        Show this help
+  cc-api-proxy [-d|--debug] [-s|--simple]  Start the proxy daemon
+  cc-api-proxy stop                        Stop the proxy daemon
+  cc-api-proxy status                      Check if proxy is running
+  cc-api-proxy version                     Show version
+  cc-api-proxy help                        Show this help
 
 Flags:
   -d, --debug     Enable debug mode (logs full requests/responses)
@@ -105,29 +105,40 @@ Configuration:
   Config file locations (checked in order):
     1. ./.env
     2. ~/.claude/proxy.env
-    3. ~/.claude-code-proxy
+    3. ~/.cc-api-proxy
 
   Required:
-    OPENAI_API_KEY         Your OpenAI API key
+    OPENAI_API_KEY              Default API key (fallback for all tiers)
 
-  Optional:
-    ANTHROPIC_DEFAULT_OPUS_MODEL      Override opus model name
-    ANTHROPIC_DEFAULT_OPUS_BASE_URL   Override opus base URL
-    ANTHROPIC_DEFAULT_SONNET_MODEL    Override sonnet model name
-    ANTHROPIC_DEFAULT_SONNET_BASE_URL Override sonnet base URL
-    ANTHROPIC_DEFAULT_HAIKU_MODEL     Override haiku model name
-    ANTHROPIC_DEFAULT_HAIKU_BASE_URL  Override haiku base URL
-    OPENAI_BASE_URL                   Default base URL (fallback)
-    HOST                              Server host (default: 0.0.0.0)
-    PORT                              Server port (default: 8082)
+  Model routing (per-tier URL, key and model):
+    ANTHROPIC_DEFAULT_OPUS_BASE_URL    Override base URL for Opus tier
+    ANTHROPIC_DEFAULT_OPUS_API_KEY     Override API key for Opus tier
+    ANTHROPIC_DEFAULT_OPUS_MODEL       Override model name for Opus tier
+    ANTHROPIC_DEFAULT_SONNET_BASE_URL  Override base URL for Sonnet tier
+    ANTHROPIC_DEFAULT_SONNET_API_KEY   Override API key for Sonnet tier
+    ANTHROPIC_DEFAULT_SONNET_MODEL     Override model name for Sonnet tier
+    ANTHROPIC_DEFAULT_HAIKU_BASE_URL   Override base URL for Haiku tier
+    ANTHROPIC_DEFAULT_HAIKU_API_KEY    Override API key for Haiku tier
+    ANTHROPIC_DEFAULT_HAIKU_MODEL      Override model name for Haiku tier
+    OPENAI_BASE_URL                    Default base URL (fallback for all tiers)
+
+  Enterprise HTTP proxy:
+    CLAUDE_HTTP_PROXY       HTTP proxy URL (e.g. http://proxy.company.com:8080)
+    CLAUDE_HTTPS_PROXY      HTTPS proxy URL
+    CLAUDE_NO_PROXY         Comma-separated list of hosts to bypass
+    CLAUDE_PROXY_FROM_ENV   Use system HTTP_PROXY/HTTPS_PROXY (default: true)
+
+  Server:
+    HOST                    Server host (default: 0.0.0.0)
+    PORT                    Server port (default: 8082)
 
 Examples:
   # Start proxy
-  claude-code-proxy
+  cc-api-proxy
 
-  # Use with Claude Code (via ccp wrapper)
-  ccp chat
+  # Start with debug logging
+  cc-api-proxy -d
 
-  # Or manually
-  ANTHROPIC_BASE_URL=http://localhost:8082 claude chat`)
+  # Use with Claude Code
+  ANTHROPIC_BASE_URL=http://localhost:8082 claude -p "Hello"`)
 }
