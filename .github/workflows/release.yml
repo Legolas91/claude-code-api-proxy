@@ -63,7 +63,7 @@ jobs:
         fi
 
         # Always create installation instructions
-        cat >> /tmp/changelog_section.md << 'EOF'
+        cat >> /tmp/changelog_section.md << EOF
         ## Installation
 
         Download the appropriate binary for your platform:

@@ -479,7 +479,7 @@ The proxy uses a fully adaptive system that automatically learns what parameters
 **What's Cached:**
 ```go
 CacheKey{
-    BaseURL: "https://gpt.erst.dk/api",  // Provider
+    BaseURL: "https://openwebui.example.com/api",  // Provider
     Model:   "gpt-5"                      // Model name
 }
 → ModelCapabilities{

@@ -45,3 +45,10 @@ session.jsonl
 
 # Daemon files
 *.pid
+
+# Certificates and private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
