@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.5.10)'
+        required: true
 
 permissions:
   contents: write
@@ -14,10 +19,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Resolve version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        ref: ${{ steps.version.outputs.tag }}
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -39,7 +54,7 @@ jobs:
     - name: Extract release notes
       id: extract-release-notes
       run: |
-        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${{ steps.version.outputs.tag }}
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
         # Extract changelog section for this version
