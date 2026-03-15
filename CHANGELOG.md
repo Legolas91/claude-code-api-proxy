@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.10] - 2026-03-15
+
+### Security
+- **gofiber/fiber/v2**: Upgraded from v2.52.9 to v2.52.11
+  - Fix CVE-2025-66630: Predictable UUIDs from randomness errors
+  - Only affects localhost:8082 binding — actual risk was negligible
+- **klauspost/compress**: Upgraded from v1.18.1 to v1.18.4 (retracted version replaced)
+
+### Stats
+- **Files changed**: 2 (go.mod, go.sum)
+- **Tests**: all non-Windows tests passed ✅
+
 ## [1.5.9] - 2026-03-01
 
 ### Fixed
