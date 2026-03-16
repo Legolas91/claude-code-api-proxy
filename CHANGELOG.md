@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.11] - 2026-03-16
+
+### Security
+- **Go toolchain**: Upgraded from 1.25.5 to 1.26.1
+  - Fix CVE-2025-68121: crypto/tls unexpected session resumption (CRITICAL)
+  - Fix CVE-2025-61726: net/url memory exhaustion (HIGH)
+  - Fix CVE-2025-61728: archive/zip excessive CPU consumption (HIGH)
+  - All binaries now compiled with Go 1.26.1 stdlib
+
+### Stats
+- **Files changed**: 1 (go.mod)
+- **Tests**: all non-Windows tests passed ✅
+
 ## [1.5.10] - 2026-03-15
 
 ### Security
