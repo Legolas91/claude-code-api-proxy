@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -134,10 +135,10 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		}
 	}
 
-	// Validate API key (if configured)
+	// Validate API key (if configured) using constant-time comparison to prevent timing attacks
 	if cfg.AnthropicAPIKey != "" {
 		apiKey := c.Get("x-api-key")
-		if apiKey != cfg.AnthropicAPIKey {
+		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(cfg.AnthropicAPIKey)) != 1 {
 			return c.Status(401).JSON(fiber.Map{
 				"type": "error",
 				"error": fiber.Map{

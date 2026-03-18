@@ -16,12 +16,15 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/converter"
 	"github.com/claude-code-proxy/proxy/internal/daemon"
 	"github.com/claude-code-proxy/proxy/internal/version"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
@@ -76,6 +79,29 @@ func Start(cfg *config.Config) error {
 
 	// Middleware
 	app.Use(recover.New())
+
+	// Security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.)
+	app.Use(helmet.New())
+
+	// Rate limiting (disabled by default, enabled via RATE_LIMIT_RPM)
+	if cfg.RateLimitRPM > 0 {
+		app.Use(limiter.New(limiter.Config{
+			Max:        cfg.RateLimitRPM,
+			Expiration: 1 * time.Minute,
+			KeyGenerator: func(c *fiber.Ctx) string {
+				return "global" // single bucket — all requests share the same limit
+			},
+			LimitReached: func(c *fiber.Ctx) error {
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+					"type": "error",
+					"error": fiber.Map{
+						"type":    "rate_limit_error",
+						"message": fmt.Sprintf("Rate limit exceeded: maximum %d requests per minute", cfg.RateLimitRPM),
+					},
+				})
+			},
+		}))
+	}
 
 	// Custom CORS middleware - restrictive security policy
 	// Only allows localhost origins to prevent cross-origin API key exfiltration

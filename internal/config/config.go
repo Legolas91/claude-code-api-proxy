@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -95,6 +96,9 @@ type Config struct {
 	HTTPSProxy   string // Override HTTPS_PROXY env var
 	NoProxy      string // Comma-separated list of hosts to exclude from proxy
 	ProxyFromEnv bool   // Use system proxy env vars (default: true)
+
+	// Rate limiting (0 = disabled)
+	RateLimitRPM int // Maximum requests per minute across all clients
 }
 
 // Load reads configuration from environment variables
@@ -154,6 +158,9 @@ func Load() (*Config, error) {
 		HTTPSProxy:   os.Getenv("CLAUDE_HTTPS_PROXY"),
 		NoProxy:      os.Getenv("CLAUDE_NO_PROXY"),
 		ProxyFromEnv: getEnvAsBoolOrDefault("CLAUDE_PROXY_FROM_ENV", true),
+
+		// Rate limiting (0 = disabled)
+		RateLimitRPM: getEnvAsIntOrDefault("RATE_LIMIT_RPM", 0),
 	}
 
 	// Validate required fields
@@ -190,6 +197,15 @@ func getEnvOrDefault(key, defaultValue string) string {
 func getEnvAsBoolOrDefault(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		return value == "true" || value == "1" || value == "yes"
+	}
+	return defaultValue
+}
+
+func getEnvAsIntOrDefault(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if n, err := strconv.Atoi(value); err == nil && n >= 0 {
+			return n
+		}
 	}
 	return defaultValue
 }
