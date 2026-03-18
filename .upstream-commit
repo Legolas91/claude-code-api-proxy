@@ -1,5 +1,12 @@
 # Upstream commit pinned from nielspeter/claude-code-proxy
-# This file tracks the exact upstream version we're based on
-# Update only after tests pass with: ./scripts/update-upstream.sh
+# This file tracks the last upstream commit that was reviewed for cherry-pick.
+#
+# Strategy: cherry-pick only (NO rebase — our fork diverged too deeply)
+# - Divergence point: 61c92a30ec726fb4982971488fd27ee5e89e709b (first functional commit)
+# - Our fork has 48+ commits, 5070+ lines more than upstream
+# - See docs/UPSTREAM-SYNC.md for the full per-commit analysis
+#
+# When upstream moves: run ./scripts/update-upstream.sh to list new commits,
+# then evaluate each one manually against our codebase before cherry-picking.
 
 2e82b12ed6aaf5112d96175841f5ea72aa630f16
