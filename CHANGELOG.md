@@ -8,10 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Rate limiting** via `RATE_LIMIT_RPM` env var (default 0 = disabled); uses `fiber/middleware/limiter` with global bucket and Claude-format 429 response
+- **Security headers** via `fiber/middleware/helmet`: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy, X-DNS-Prefetch-Control
 - Health endpoint now exposes `claude_code_version` when Claude Code CLI is detected at startup
   - Detection via `claude --version`, fallback to npm package.json
   - Field omitted if detection fails — proxy starts normally regardless
   - Example: `{"status":"ok","version":"1.5.11","claude_code_version":"2.1.63"}`
+
+### Security
+- **Timing-safe API key validation**: replaced string equality with `crypto/subtle.ConstantTimeCompare` to prevent timing attacks
 
 ### Changed
 - Removed GitHub Actions workflows (`.github/workflows/`) — migrating to Gitea Actions
