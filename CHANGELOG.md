@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Health endpoint now exposes `claude_code_version` when Claude Code CLI is detected at startup
+  - Detection via `claude --version`, fallback to npm package.json
+  - Field omitted if detection fails — proxy starts normally regardless
+  - Example: `{"status":"ok","version":"1.5.11","claude_code_version":"2.1.63"}`
+
+### Changed
+- Removed GitHub Actions workflows (`.github/workflows/`) — migrating to Gitea Actions
+- Moved `RELEASE_TEMPLATE.md` and `RELEASE_WORKFLOW.md` from `.github/` to `docs/`
+- README: updated Go badge to 1.26, removed CI badge (workflow deleted)
+
 ## [1.5.11] - 2026-03-16
 
 ### Security

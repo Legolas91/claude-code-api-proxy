@@ -1,8 +1,7 @@
 # Claude Code API Proxy (Go)
 
 [![Latest Release](https://img.shields.io/github/v/release/Legolas91/claude-code-api-proxy)](https://github.com/Legolas91/claude-code-api-proxy/releases/latest)
-[![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://go.dev/doc/go1.25)
-[![CI](https://img.shields.io/github/actions/workflow/status/Legolas91/claude-code-api-proxy/ci.yml?branch=main)](https://github.com/Legolas91/claude-code-api-proxy/actions/workflows/ci.yml)
+[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/doc/go1.26)
 [![License: MIT](https://img.shields.io/github/license/Legolas91/claude-code-api-proxy)](LICENSE)
 [![Issues](https://img.shields.io/github/issues/Legolas91/claude-code-api-proxy)](https://github.com/Legolas91/claude-code-api-proxy/issues)
 
