@@ -8,9 +8,12 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -23,8 +26,48 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
+// detectClaudeCodeVersion detects the installed Claude Code CLI version.
+// It tries `claude --version` first, then falls back to reading the npm package.json.
+// Returns an empty string if the version cannot be detected.
+func detectClaudeCodeVersion() string {
+	// Strategy 1: claude --version
+	if out, err := exec.Command("claude", "--version").Output(); err == nil {
+		if v := extractVersion(strings.TrimSpace(string(out))); v != "" {
+			return v
+		}
+	}
+
+	// Strategy 2: npm package.json
+	if npmRoot, err := exec.Command("npm", "root", "-g").Output(); err == nil {
+		pkgPath := strings.TrimSpace(string(npmRoot)) + "/@anthropic-ai/claude-code/package.json"
+		if data, err := os.ReadFile(pkgPath); err == nil {
+			var pkg struct {
+				Version string `json:"version"`
+			}
+			if err := json.Unmarshal(data, &pkg); err == nil && pkg.Version != "" {
+				return pkg.Version
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractVersion extracts a semver version string from command output.
+// Handles formats like "1.2.49", "v1.2.49", "1.2.49 (Claude Code)".
+func extractVersion(s string) string {
+	re := regexp.MustCompile(`v?(\d+\.\d+\.\d+)`)
+	if m := re.FindStringSubmatch(s); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
 // Start initializes and starts the HTTP server
 func Start(cfg *config.Config) error {
+	// Detect Claude Code CLI version once at startup
+	claudeCodeVersion := detectClaudeCodeVersion()
+
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ServerHeader:          "Claude-Code-Proxy",
@@ -85,10 +128,14 @@ func Start(cfg *config.Config) error {
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
+		resp := fiber.Map{
 			"status":  "ok",
 			"version": version.Version,
-		})
+		}
+		if claudeCodeVersion != "" {
+			resp["claude_code_version"] = claudeCodeVersion
+		}
+		return c.JSON(resp)
 	})
 
 	// Root endpoint - proxy info
