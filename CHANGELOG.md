@@ -7,21 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.12] - 2026-03-18
+
 ### Added
 - **Rate limiting** via `RATE_LIMIT_RPM` env var (default 0 = disabled); uses `fiber/middleware/limiter` with global bucket and Claude-format 429 response
 - **Security headers** via `fiber/middleware/helmet`: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy, X-DNS-Prefetch-Control
 - Health endpoint now exposes `claude_code_version` when Claude Code CLI is detected at startup
   - Detection via `claude --version`, fallback to npm package.json
   - Field omitted if detection fails — proxy starts normally regardless
-  - Example: `{"status":"ok","version":"1.5.11","claude_code_version":"2.1.63"}`
+  - Example: `{"status":"ok","version":"1.5.12","claude_code_version":"2.1.78"}`
 
 ### Security
 - **Timing-safe API key validation**: replaced string equality with `crypto/subtle.ConstantTimeCompare` to prevent timing attacks
 
 ### Changed
-- Removed GitHub Actions workflows (`.github/workflows/`) — migrating to Gitea Actions
+- Removed GitHub Actions workflows — migrating to Gitea Actions
 - Moved `RELEASE_TEMPLATE.md` and `RELEASE_WORKFLOW.md` from `.github/` to `docs/`
-- README: updated Go badge to 1.26, removed CI badge (workflow deleted)
+- README: updated Go badge to 1.26, removed CI badge
 
 ## [1.5.11] - 2026-03-16
 
