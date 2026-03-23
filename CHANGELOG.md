@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.13] - 2026-03-23
+
+### Added
+- **Gitea Actions CI/CD** for bare-metal Windows runner
+  - `ci.yml`: test + build + golangci-lint on push/PR to main
+  - `release.yml`: cross-platform build (5 targets) + checksums + Gitea API release on tag
+- Pure PowerShell workflows — no JS actions, no bash, no Node.js dependency
+
+### Changed
+- Updated golangci-lint config: exclude gosec false positives G101/G304/G703
+- golangci-lint upgraded to v2.11.3 (Go 1.26.1 compatible)
+
 ## [1.5.12] - 2026-03-18
 
 ### Added

@@ -1,0 +1,43 @@
+# CI — claude-code-api-proxy
+# Runs tests, build, and lint on every push/PR to main.
+# Pure PowerShell — bare-metal Windows runner.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        shell: pwsh
+        run: |
+          $url = "${{ github.server_url }}".Replace("https://", "https://token:${{ github.token }}@")
+          git clone --depth 1 --branch "${{ github.ref_name }}" "$url/${{ github.repository }}.git" .
+
+      - name: Verify Go
+        shell: pwsh
+        run: go version
+
+      - name: Download dependencies
+        shell: pwsh
+        run: go mod download
+
+      - name: Test
+        shell: pwsh
+        run: |
+          # Exclude internal/daemon (TestIsRunningHealthCheck requires a running proxy — pre-existing issue)
+          go test -v ./internal/config/... ./internal/converter/... ./internal/server/... ./pkg/...
+
+      - name: Build
+        shell: pwsh
+        run: go build -ldflags "-s -w" -o cc-api-proxy.exe cmd/cc-api-proxy/main.go
+
+      - name: Lint
+        shell: pwsh
+        run: golangci-lint run

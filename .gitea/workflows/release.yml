@@ -1,0 +1,159 @@
+# Release — claude-code-api-proxy
+# Builds cross-platform binaries and creates a Gitea release on tag push.
+# Pure PowerShell — bare-metal Windows runner.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        shell: pwsh
+        run: |
+          $url = "${{ github.server_url }}".Replace("https://", "https://token:${{ github.token }}@")
+          git clone --depth 1 --branch "${{ github.ref_name }}" "$url/${{ github.repository }}.git" .
+
+      - name: Verify Go
+        shell: pwsh
+        run: go version
+
+      - name: Extract version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Building version: $version"
+
+      - name: Download dependencies
+        shell: pwsh
+        run: go mod download
+
+      - name: Test
+        shell: pwsh
+        run: |
+          # Exclude internal/daemon (TestIsRunningHealthCheck requires a running proxy)
+          go test -v ./internal/config/... ./internal/converter/... ./internal/server/... ./pkg/...
+
+      - name: Build cross-platform
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          $binary = "cc-api-proxy"
+          $versionPkg = "github.com/claude-code-proxy/proxy/internal/version"
+          $ldflags = "-s -w -X ${versionPkg}.Version=${version}"
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $targets = @(
+            @{ GOOS="darwin";  GOARCH="arm64"; Suffix="-darwin-arm64" },
+            @{ GOOS="darwin";  GOARCH="amd64"; Suffix="-darwin-amd64" },
+            @{ GOOS="linux";   GOARCH="amd64"; Suffix="-linux-amd64" },
+            @{ GOOS="linux";   GOARCH="arm64"; Suffix="-linux-arm64" },
+            @{ GOOS="windows"; GOARCH="amd64"; Suffix="-windows-amd64.exe" }
+          )
+
+          foreach ($t in $targets) {
+            $out = "dist/${binary}$($t.Suffix)"
+            Write-Host "Building $($t.GOOS)/$($t.GOARCH)..."
+            $env:GOOS = $t.GOOS
+            $env:GOARCH = $t.GOARCH
+            go build -ldflags $ldflags -o $out "cmd/${binary}/main.go"
+            if ($LASTEXITCODE -ne 0) { throw "Build failed for $($t.GOOS)/$($t.GOARCH)" }
+          }
+
+          # Reset to host values
+          Remove-Item env:GOOS -ErrorAction SilentlyContinue
+          Remove-Item env:GOARCH -ErrorAction SilentlyContinue
+
+          Get-ChildItem dist/ | Format-Table Name, Length
+
+      - name: Zip binaries
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          foreach ($file in Get-ChildItem dist/*) {
+            $zipName = "$($file.BaseName)-${version}.zip"
+            Write-Host "Zipping $($file.Name) -> $zipName"
+            Compress-Archive -Path $file.FullName -DestinationPath "dist/$zipName"
+            Remove-Item $file.FullName
+          }
+          Get-ChildItem dist/ | Format-Table Name, Length
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          $lines = @()
+          foreach ($file in Get-ChildItem dist/*.zip) {
+            $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
+            $lines += "$hash  $($file.Name)"
+          }
+          $lines | Out-File -Encoding utf8 dist/checksums.txt
+          Write-Host "--- Checksums ---"
+          Get-Content dist/checksums.txt
+
+      - name: Extract release notes from CHANGELOG
+        shell: pwsh
+        run: |
+          $ver = $env:VERSION -replace '^v', ''
+          $content = Get-Content CHANGELOG.md -Raw
+          $pattern = "(?ms)^## \[$ver\].*?$\n(.*?)(?=^## \[|\z)"
+          $match = [regex]::Match($content, $pattern)
+
+          if ($match.Success -and $match.Groups[1].Value.Trim()) {
+            $notes = $match.Groups[1].Value.Trim()
+          } else {
+            $notes = "Release $env:VERSION"
+          }
+
+          $notes | Out-File -Encoding utf8 release-notes.txt
+          Write-Host "--- Release notes ---"
+          Get-Content release-notes.txt
+
+      - name: Create release and upload assets
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          $notes = Get-Content -Path "release-notes.txt" -Raw
+          $serverUrl = "${{ github.server_url }}"
+          $repo = "${{ github.repository }}"
+          $token = "${{ github.token }}"
+
+          $headers = @{
+            Authorization = "token $token"
+            Accept = "application/json"
+          }
+
+          # Create release
+          $body = @{
+            tag_name = $version
+            name = $version
+            body = $notes
+          } | ConvertTo-Json -Compress
+
+          Write-Host "Creating release $version..."
+          $release = Invoke-RestMethod `
+            -Uri "$serverUrl/api/v1/repos/$repo/releases" `
+            -Method Post -Headers $headers `
+            -Body $body -ContentType "application/json" `
+            -SkipCertificateCheck
+
+          $releaseId = $release.id
+          Write-Host "Release created: id=$releaseId"
+
+          # Upload assets
+          foreach ($file in Get-ChildItem -Path "dist/*") {
+            Write-Host "Uploading $($file.Name)..."
+            $uri = "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets?name=$($file.Name)"
+            Invoke-RestMethod `
+              -Uri $uri -Method Post -Headers $headers `
+              -InFile $file.FullName `
+              -ContentType "application/octet-stream" `
+              -SkipCertificateCheck
+          }
+
+          Write-Host "All assets uploaded."

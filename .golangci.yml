@@ -14,3 +14,9 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+  settings:
+    gosec:
+      excludes:
+        - G101  # False positive: endpoint paths are not credentials
+        - G304  # Config file paths and package.json reads are trusted
+        - G703  # Config file paths from env vars are trusted
