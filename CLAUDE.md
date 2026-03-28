@@ -87,6 +87,25 @@ The proxy applies different request parameters based on `OPENAI_BASE_URL`:
 - Tracks content block indices to maintain proper ordering
 - Handles tool call deltas by accumulating function arguments across chunks
 
+### Retry Loop Detection (v1.5.14+)
+
+When backend models (e.g. Codestral/Mistral) receive a tool error, they sometimes retry the exact same tool call indefinitely. The proxy detects this pattern and injects a nudge message to break the loop.
+
+**How it works:**
+1. On each request, scan `messages[]` from the tail for consecutive identical `tool_use` blocks (same tool name + same JSON input)
+2. If N consecutive matches found (default N=3), append a user message: *"Stop retrying. Try a completely different approach."*
+3. The modified messages are forwarded to the provider, which receives the nudge and changes strategy
+
+**Configuration:**
+- `PROXY_MAX_IDENTICAL_RETRIES=3` (default) — threshold before nudge injection
+- `PROXY_MAX_IDENTICAL_RETRIES=0` — disable loop detection
+
+**Implementation:** `internal/loop/detector.go` — `DetectRetryLoop()` + `InjectLoopBreaker()`
+
+**Logging:**
+- Simple mode: `[HH:MM:SS] [LOOP] Retry loop detected — injecting nudge`
+- Debug mode: `[DEBUG] Retry loop detected (3 identical tool calls), injecting nudge`
+
 ### Pattern-Based Model Routing
 
 The `mapModel()` function in converter.go implements intelligent routing:
@@ -449,6 +468,7 @@ When testing locally, use `-d` flag for debug logging to see full requests/respo
 - `internal/converter/` - Claude ↔ OpenAI format conversion logic
 - `internal/server/` - HTTP server (Fiber), request handlers, streaming
 - `internal/daemon/` - Process management, PID file handling
+- `internal/loop/` - Retry loop detection and nudge injection
 - `pkg/models/` - Shared type definitions for Claude and OpenAI formats
 - `scripts/ccp` - Wrapper script that starts daemon and execs Claude Code
 
@@ -458,4 +478,5 @@ When testing locally, use `-d` flag for debug logging to see full requests/respo
 - `internal/converter/converter.go:ConvertResponse()` - OpenAI → Claude response conversion, thinking block extraction
 - `internal/server/handlers.go:streamOpenAIToClaude()` - SSE chunk conversion, event generation
 - `internal/config/config.go:DetectProvider()` - URL-based provider detection
+- `internal/loop/detector.go:DetectRetryLoop()` - Infinite tool-call retry loop detection
 - `pkg/models/types.go` - All request/response type definitions

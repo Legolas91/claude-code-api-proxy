@@ -308,6 +308,9 @@ Route outbound requests through a corporate HTTP/HTTPS proxy.
   - If set, clients must provide this exact key
   - Leave unset to disable validation
 
+**Optional - Behavior:**
+- `PROXY_MAX_IDENTICAL_RETRIES` - Max consecutive identical tool calls before injecting a nudge to break retry loops (default: `3`, `0` = disabled)
+
 **Optional - Server Settings:**
 - `HOST` - Server host (default: `0.0.0.0`)
 - `PORT` - Server port (default: `8082`)
@@ -323,6 +326,7 @@ claude-code-api-proxy/
 ├── internal/
 │   ├── config/               # Config loading
 │   ├── daemon/               # Process management
+│   ├── loop/                 # Retry loop detection
 │   ├── server/               # HTTP server (Fiber)
 │   └── converter/            # Claude ↔ OpenAI conversion
 ├── pkg/

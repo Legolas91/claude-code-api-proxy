@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.14] - 2026-03-28
+
+### Added
+- **Retry loop detection** — detects and breaks infinite tool-call retry loops
+  - New `internal/loop/` package: scans conversation for N consecutive identical `tool_use` calls
+  - Injects a user nudge message to force the model to try a different approach
+  - Configurable via `PROXY_MAX_IDENTICAL_RETRIES` env var (default: 3, 0 = disabled)
+  - Logs loop detection in simple mode (`[LOOP]`) and debug mode (`[DEBUG]`)
+  - 9 unit tests covering all scenarios (threshold, different inputs/tools, disabled, etc.)
+- **Integration test** (Test 9) in `test-proxy.sh` — simulates a 3-call retry loop and verifies nudge injection
+
 ## [1.5.13] - 2026-03-23
 
 ### Added
