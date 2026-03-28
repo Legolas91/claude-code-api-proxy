@@ -13,6 +13,7 @@ import (
 
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/converter"
+	"github.com/claude-code-proxy/proxy/internal/loop"
 	"github.com/claude-code-proxy/proxy/pkg/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -147,6 +148,18 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 				},
 			})
 		}
+	}
+
+	// Detect and break infinite tool-call retry loops
+	if cfg.MaxIdenticalRetries > 0 && loop.DetectRetryLoop(claudeReq.Messages, cfg.MaxIdenticalRetries) {
+		if cfg.Debug {
+			fmt.Printf("[DEBUG] Retry loop detected (%d identical tool calls), injecting nudge\n", cfg.MaxIdenticalRetries)
+		}
+		if cfg.SimpleLog {
+			timestamp := time.Now().Format("15:04:05")
+			fmt.Printf("[%s] [LOOP] Retry loop detected — injecting nudge\n", timestamp)
+		}
+		claudeReq.Messages = loop.InjectLoopBreaker(claudeReq.Messages)
 	}
 
 	// Get provider configuration for this tier (multi-URL routing support)

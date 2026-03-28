@@ -99,6 +99,9 @@ type Config struct {
 
 	// Rate limiting (0 = disabled)
 	RateLimitRPM int // Maximum requests per minute across all clients
+
+	// Loop detection: max consecutive identical tool calls before injecting a nudge (0 = disabled)
+	MaxIdenticalRetries int
 }
 
 // Load reads configuration from environment variables
@@ -161,6 +164,9 @@ func Load() (*Config, error) {
 
 		// Rate limiting (0 = disabled)
 		RateLimitRPM: getEnvAsIntOrDefault("RATE_LIMIT_RPM", 0),
+
+		// Loop detection (0 = disabled)
+		MaxIdenticalRetries: getEnvAsIntOrDefault("PROXY_MAX_IDENTICAL_RETRIES", 3),
 	}
 
 	// Validate required fields
