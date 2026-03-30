@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.16] - 2026-03-30
+
+### Changed
+- **`--help` output updated** — documents all v1.5.15 env vars introduced in the previous release but missing from the built-in help
+  - New section "Tool reliability": `PROXY_AUGMENT_TOOL_PROMPT`, `PROXY_TOOL_PROMPT_TEMPLATE`, `PROXY_REPAIR_TOOL_CALLS`, `PROXY_MAX_LOOP_LEVEL`
+  - New section "Loop detection": `PROXY_MAX_IDENTICAL_RETRIES`
+
 ## [1.5.15] - 2026-03-30
 
 ### Added

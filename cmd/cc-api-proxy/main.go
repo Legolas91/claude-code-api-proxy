@@ -128,6 +128,19 @@ Configuration:
     CLAUDE_NO_PROXY         Comma-separated list of hosts to bypass
     CLAUDE_PROXY_FROM_ENV   Use system HTTP_PROXY/HTTPS_PROXY (default: true)
 
+  Tool reliability (v1.5.15+):
+    PROXY_AUGMENT_TOOL_PROMPT   Inject tool-use instructions into system prompt
+                                (default: auto — enabled for unknown providers only;
+                                 set true/false to force on/off)
+    PROXY_TOOL_PROMPT_TEMPLATE  Override per-model tool guidance text
+    PROXY_REPAIR_TOOL_CALLS     Fix malformed tool call arguments (default: true)
+    PROXY_MAX_LOOP_LEVEL        Cap loop escalation: 1=nudge, 2=strong nudge,
+                                3=disable tools (default: 3)
+
+  Loop detection:
+    PROXY_MAX_IDENTICAL_RETRIES  Identical tool calls before nudge injection
+                                 (default: 3, 0=disabled)
+
   Server:
     HOST                    Server host (default: 0.0.0.0)
     PORT                    Server port (default: 8082)
