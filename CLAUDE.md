@@ -87,6 +87,31 @@ The proxy applies different request parameters based on `OPENAI_BASE_URL`:
 - Tracks content block indices to maintain proper ordering
 - Handles tool call deltas by accumulating function arguments across chunks
 
+### Tool Choice Filtering (v1.5.15+)
+
+When Claude Code sends `tool_choice: {"type":"tool","name":"X"}`, the proxy filters the tools list to only include that specific tool before forwarding to the backend. This reduces model confusion on backends that have trouble selecting the right tool when many are present.
+
+**How it works:**
+- `filterToolsForChoice()` in converter.go translates Claude tool_choice to OpenAI format
+- `{"type":"tool","name":"X"}` → sends only tool X + `{"type":"function","function":{"name":"X"}}`
+- `"any"` → `"required"` (OpenAI/vLLM equivalent)
+- `"auto"` → `"auto"` (unchanged)
+- Applies to both streaming and non-streaming paths
+
+### Tool-Result 400 Retry (v1.5.15+)
+
+Some vLLM backends (e.g. codestral-2503 on enterprise gateways) reject multi-turn conversations containing `role:"tool"` messages with HTTP 400. The proxy detects this and retries with flattened messages.
+
+**How it works:**
+1. On HTTP 400 with tool_results in the request, retry with messages flattened to plain text:
+   - Assistant `tool_calls` → `"Calling tool \`X\` with: {...}"` text message
+   - `role:"tool"` results → `"[Tool result]: ..."` user message
+2. If flattened retry also fails, a second retry strips all tools entirely
+3. Applies to both streaming and non-streaming paths
+4. Logs `[WARN] Backend 400 on tool_result` on first retry
+
+**Implementation:** `hasToolResults`, `flattenToolMessages`, `extractToolResultContent` in handlers.go
+
 ### Retry Loop Detection (v1.5.14+)
 
 When backend models (e.g. Codestral/Mistral) receive a tool error, they sometimes retry the exact same tool call indefinitely. The proxy detects this pattern and injects a nudge message to break the loop.

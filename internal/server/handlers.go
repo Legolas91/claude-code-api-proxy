@@ -150,16 +150,31 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		}
 	}
 
-	// Detect and break infinite tool-call retry loops
-	if cfg.MaxIdenticalRetries > 0 && loop.DetectRetryLoop(claudeReq.Messages, cfg.MaxIdenticalRetries) {
-		if cfg.Debug {
-			fmt.Printf("[DEBUG] Retry loop detected (%d identical tool calls), injecting nudge\n", cfg.MaxIdenticalRetries)
+	// Detect and break infinite tool-call retry loops with escalating severity
+	if cfg.MaxIdenticalRetries > 0 {
+		if level := loop.GetLoopLevel(claudeReq.Messages, cfg.MaxIdenticalRetries, cfg.MaxLoopLevel); level > 0 {
+			claudeReq.Messages = loop.InjectLoopBreakerLevel(claudeReq.Messages, level)
+			if level >= 3 {
+				// Disable tools to force a text-based approach after persistent looping
+				claudeReq.Tools = nil
+				claudeReq.ToolChoice = nil
+			}
+			if cfg.Debug {
+				suffix := ""
+				if level >= 3 {
+					suffix = " + disabling tools"
+				}
+				fmt.Printf("[DEBUG] Retry loop detected (level %d), injecting nudge%s\n", level, suffix)
+			}
+			if cfg.SimpleLog {
+				timestamp := time.Now().Format("15:04:05")
+				if level >= 3 {
+					fmt.Printf("[%s] [LOOP] Persistent loop (level %d) — disabling tools\n", timestamp, level)
+				} else {
+					fmt.Printf("[%s] [LOOP] Retry loop detected (level %d) — injecting nudge\n", timestamp, level)
+				}
+			}
 		}
-		if cfg.SimpleLog {
-			timestamp := time.Now().Format("15:04:05")
-			fmt.Printf("[%s] [LOOP] Retry loop detected — injecting nudge\n", timestamp)
-		}
-		claudeReq.Messages = loop.InjectLoopBreaker(claudeReq.Messages)
 	}
 
 	// Get provider configuration for this tier (multi-URL routing support)
@@ -245,6 +260,17 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		}
 	}
 
+	// Repair malformed tool call arguments from backends that don't follow OpenAI format strictly
+	if cfg.RepairToolCalls && converter.RepairToolCalls(openaiResp) {
+		if cfg.Debug {
+			fmt.Printf("[DEBUG] Repaired malformed tool call arguments from model %s\n", openaiReq.Model)
+		}
+		if cfg.SimpleLog {
+			timestamp := time.Now().Format("15:04:05")
+			fmt.Printf("[%s] [WARN] Repaired malformed tool call arguments (model=%s)\n", timestamp, openaiReq.Model)
+		}
+	}
+
 	// Convert OpenAI response to Claude format
 	claudeResp, err := converter.ConvertResponse(openaiResp, claudeReq.Model)
 	if err != nil {
@@ -286,6 +312,24 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 			claudeResp.Usage.InputTokens,
 			claudeResp.Usage.OutputTokens,
 			tokensPerSec)
+
+		// Tool telemetry: log which tools were used
+		if len(openaiReq.Tools) > 0 {
+			var usedNames []string
+			for _, block := range claudeResp.Content {
+				if block.Type == "tool_use" {
+					usedNames = append(usedNames, block.Name)
+				}
+			}
+			if len(usedNames) > 0 {
+				fmt.Printf("[%s] [TOOL] model=%s sent=%d used=%d name=%s\n",
+					timestamp,
+					openaiReq.Model,
+					len(openaiReq.Tools),
+					len(usedNames),
+					strings.Join(usedNames, ","))
+			}
+		}
 	}
 
 	return c.JSON(claudeResp)
@@ -329,7 +373,7 @@ func handleStreamingMessages(c *fiber.Ctx, openaiReq *models.OpenAIRequest, clau
 		}
 
 		// Stream conversion
-		streamOpenAIToClaude(w, resp.Body, openaiReq.Model, claudeModel, cfg, startTime)
+		streamOpenAIToClaude(w, resp.Body, openaiReq.Model, claudeModel, cfg, startTime, len(openaiReq.Tools))
 
 		if cfg.Debug {
 			fmt.Printf("[DEBUG] StreamWriter: Completed\n")
@@ -399,7 +443,7 @@ func (s *thinkingBlockState) emitThinkingDelta(w *bufio.Writer, text string, del
 //
 // The function maintains state to track content block indices, tool call accumulation,
 // and ensures proper event ordering for Claude Code compatibility.
-func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel string, claudeModel string, cfg *config.Config, startTime time.Time) {
+func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel string, claudeModel string, cfg *config.Config, startTime time.Time, toolsSent int) {
 	if cfg.Debug {
 		fmt.Printf("[DEBUG] streamOpenAIToClaude: Starting conversion\n")
 	}
@@ -824,6 +868,24 @@ func streamOpenAIToClaude(w *bufio.Writer, reader io.Reader, providerModel strin
 			inputTokens,
 			outputTokens,
 			tokensPerSec)
+
+		// Tool telemetry: log which tools were used during streaming
+		if toolsSent > 0 && len(currentToolCalls) > 0 {
+			var usedNames []string
+			for _, tc := range currentToolCalls {
+				if tc.Name != "" {
+					usedNames = append(usedNames, tc.Name)
+				}
+			}
+			if len(usedNames) > 0 {
+				fmt.Printf("[%s] [TOOL] model=%s sent=%d used=%d name=%s\n",
+					timestamp,
+					providerModel,
+					toolsSent,
+					len(usedNames),
+					strings.Join(usedNames, ","))
+			}
+		}
 	}
 
 	// Check for scanner errors
@@ -884,6 +946,32 @@ func callOpenAI(req *models.OpenAIRequest, cfg *config.Config, baseURL, apiKey s
 			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
 			return callOpenAIInternal(&retryReq, cfg, baseURL, apiKey)
 		}
+
+		// Retry with flattened messages when backend returns 400 on tool_result cycles.
+		// Some vLLM deployments reject role:"tool" messages even when the model supports tool_use.
+		if pe, ok := err.(*providerError); ok && pe.StatusCode == 400 && hasToolResults(req.Messages) {
+			if cfg.SimpleLog {
+				timestamp := time.Now().Format("15:04:05")
+				fmt.Printf("[%s] [WARN] Backend 400 on tool_result — retrying with flattened messages\n", timestamp)
+			}
+			if cfg.Debug {
+				fmt.Printf("[DEBUG] Backend 400 on tool_result for model %s, retrying with flattened messages\n", req.Model)
+			}
+			flatReq := *req
+			flatReq.Messages = flattenToolMessages(req.Messages)
+			flatResp, flatErr := callOpenAIInternal(&flatReq, cfg, baseURL, apiKey)
+			if flatErr == nil {
+				return flatResp, nil
+			}
+			// Final attempt: also strip tools in case the model schema itself causes issues
+			if cfg.Debug {
+				fmt.Printf("[DEBUG] Flattened retry also failed (%v), retrying without tools\n", flatErr)
+			}
+			flatReq.Tools = nil
+			flatReq.ToolChoice = nil
+			return callOpenAIInternal(&flatReq, cfg, baseURL, apiKey)
+		}
+
 		return nil, err
 	}
 
@@ -903,6 +991,31 @@ func callOpenAIStream(req *models.OpenAIRequest, cfg *config.Config, baseURL, ap
 			retryReq := prepareRetryWithoutMaxCompletionTokens(req, cfg)
 			return callOpenAIStreamInternal(&retryReq, cfg, baseURL, apiKey)
 		}
+
+		// Retry with flattened messages when backend returns 400 on tool_result cycles.
+		if pe, ok := err.(*providerError); ok && pe.StatusCode == 400 && hasToolResults(req.Messages) {
+			if cfg.SimpleLog {
+				timestamp := time.Now().Format("15:04:05")
+				fmt.Printf("[%s] [WARN] Backend 400 on tool_result (stream) — retrying with flattened messages\n", timestamp)
+			}
+			if cfg.Debug {
+				fmt.Printf("[DEBUG] Backend 400 on tool_result in stream for model %s, retrying with flattened messages\n", req.Model)
+			}
+			flatReq := *req
+			flatReq.Messages = flattenToolMessages(req.Messages)
+			flatResp, flatErr := callOpenAIStreamInternal(&flatReq, cfg, baseURL, apiKey)
+			if flatErr == nil {
+				return flatResp, nil
+			}
+			// Final attempt: also strip tools
+			if cfg.Debug {
+				fmt.Printf("[DEBUG] Flattened stream retry also failed (%v), retrying without tools\n", flatErr)
+			}
+			flatReq.Tools = nil
+			flatReq.ToolChoice = nil
+			return callOpenAIStreamInternal(&flatReq, cfg, baseURL, apiKey)
+		}
+
 		return nil, err
 	}
 
@@ -1045,6 +1158,73 @@ func callOpenAIInternal(req *models.OpenAIRequest, cfg *config.Config, baseURL, 
 	}
 
 	return &openaiResp, nil
+}
+
+// hasToolResults reports whether any message in the slice has role "tool",
+// indicating a multi-turn tool_result cycle that some vLLM backends reject with 400.
+func hasToolResults(messages []models.OpenAIMessage) bool {
+	for _, m := range messages {
+		if m.Role == "tool" {
+			return true
+		}
+	}
+	return false
+}
+
+// extractToolResultContent converts a tool message Content (string or []interface{})
+// to a plain string.
+func extractToolResultContent(content interface{}) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []interface{}:
+		var parts []string
+		for _, item := range v {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if text, ok := itemMap["text"].(string); ok {
+					parts = append(parts, text)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return fmt.Sprintf("%v", content)
+}
+
+// flattenToolMessages rewrites tool_calls/tool messages as plain text.
+// Used as a fallback when the backend returns 400 on multi-turn tool_result cycles.
+// assistant messages with ToolCalls become text descriptions; role:"tool" messages
+// become role:"user" messages. All other messages are passed through unchanged.
+func flattenToolMessages(messages []models.OpenAIMessage) []models.OpenAIMessage {
+	result := make([]models.OpenAIMessage, 0, len(messages))
+	for _, msg := range messages {
+		switch msg.Role {
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				lines := make([]string, 0, len(msg.ToolCalls))
+				for _, tc := range msg.ToolCalls {
+					lines = append(lines, fmt.Sprintf(
+						"Calling tool `%s` with: %s",
+						tc.Function.Name, tc.Function.Arguments,
+					))
+				}
+				result = append(result, models.OpenAIMessage{
+					Role:    "assistant",
+					Content: strings.Join(lines, "\n"),
+				})
+			} else {
+				result = append(result, msg)
+			}
+		case "tool":
+			result = append(result, models.OpenAIMessage{
+				Role:    "user",
+				Content: "[Tool result]: " + extractToolResultContent(msg.Content),
+			})
+		default:
+			result = append(result, msg)
+		}
+	}
+	return result
 }
 
 func handleCountTokens(c *fiber.Ctx, cfg *config.Config) error {

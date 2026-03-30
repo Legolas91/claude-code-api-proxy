@@ -102,6 +102,16 @@ type Config struct {
 
 	// Loop detection: max consecutive identical tool calls before injecting a nudge (0 = disabled)
 	MaxIdenticalRetries int
+	// Maximum loop escalation level (1=gentle nudge only, 2=strong nudge, 3=disable tools)
+	MaxLoopLevel int
+
+	// Tool prompt augmentation (nil=auto-detect by provider, true=always, false=never)
+	AugmentToolPrompt *bool
+	// Override per-model tool guidance template (empty = use model-based auto-selection)
+	ToolPromptTemplate string
+
+	// Repair malformed tool call arguments in non-streaming responses (true=repair, false=pass through)
+	RepairToolCalls bool
 }
 
 // Load reads configuration from environment variables
@@ -167,6 +177,15 @@ func Load() (*Config, error) {
 
 		// Loop detection (0 = disabled)
 		MaxIdenticalRetries: getEnvAsIntOrDefault("PROXY_MAX_IDENTICAL_RETRIES", 3),
+		// Max loop escalation level (1=gentle only, 2=strong nudge, 3=disable tools)
+		MaxLoopLevel: getEnvAsIntOrDefault("PROXY_MAX_LOOP_LEVEL", 3),
+
+		// Tool prompt augmentation (nil=auto, true=always, false=never)
+		AugmentToolPrompt:  getEnvAsBoolPtrOrNil("PROXY_AUGMENT_TOOL_PROMPT"),
+		ToolPromptTemplate: os.Getenv("PROXY_TOOL_PROMPT_TEMPLATE"),
+
+		// Repair malformed tool call arguments (default: enabled)
+		RepairToolCalls: getEnvAsBoolOrDefault("PROXY_REPAIR_TOOL_CALLS", true),
 	}
 
 	// Validate required fields
@@ -198,6 +217,16 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// getEnvAsBoolPtrOrNil returns a *bool if the env var is set, nil otherwise.
+// Used for tri-state configuration (nil = auto-detect, true = force on, false = force off).
+func getEnvAsBoolPtrOrNil(key string) *bool {
+	if value := os.Getenv(key); value != "" {
+		b := value == "true" || value == "1" || value == "yes"
+		return &b
+	}
+	return nil
 }
 
 func getEnvAsBoolOrDefault(key string, defaultValue bool) bool {
@@ -378,6 +407,17 @@ func (c *Config) GetHTTPTransport() *http.Transport {
 	// else: no proxy configured
 
 	return transport
+}
+
+// ShouldAugmentToolPrompt returns true if tool-use guidance should be prepended to the system
+// prompt. Default behaviour: inject only for unknown providers (enterprise LLM gateways) where
+// tool_choice support may be incomplete. Can be overridden with PROXY_AUGMENT_TOOL_PROMPT=true/false.
+func (c *Config) ShouldAugmentToolPrompt(provider ProviderType) bool {
+	if c.AugmentToolPrompt != nil {
+		return *c.AugmentToolPrompt
+	}
+	// Auto: inject only for unknown providers (e.g. vLLM enterprise gateways)
+	return provider == ProviderUnknown
 }
 
 // shouldBypassProxy checks if a host should bypass the proxy based on NO_PROXY rules.

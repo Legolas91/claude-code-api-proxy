@@ -111,6 +111,21 @@ func extractReasoningText(detail map[string]interface{}) string {
 	return ""
 }
 
+// augmentSystemWithToolGuidance prepends concise model-specific tool-use instructions to
+// the system prompt. Called only when tools are present and the provider is configured to
+// receive augmentation (see Config.ShouldAugmentToolPrompt).
+// Uses cfg.ToolPromptTemplate if set, otherwise falls back to per-model auto-detection.
+func augmentSystemWithToolGuidance(systemText, model string, cfg *config.Config) string {
+	guidance := cfg.ToolPromptTemplate
+	if guidance == "" {
+		guidance = GetToolGuidanceForModel(model)
+	}
+	if systemText == "" {
+		return guidance
+	}
+	return guidance + "\n\n" + systemText
+}
+
 // ConvertRequest converts a Claude API request to OpenAI format
 func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models.OpenAIRequest, error) {
 	// Map model using pattern-based routing
@@ -121,6 +136,11 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 
 	// Replace Claude model identity with actual provider model name
 	systemText = sanitizeSystemPrompt(systemText, openaiModel)
+
+	// Inject tool-use guidance for backends that need explicit instructions (e.g. enterprise vLLM)
+	if len(claudeReq.Tools) > 0 && cfg.ShouldAugmentToolPrompt(cfg.DetectProvider()) {
+		systemText = augmentSystemWithToolGuidance(systemText, openaiModel, cfg)
+	}
 
 	// Convert messages
 	openaiMessages := convertMessages(claudeReq.Messages, systemText)
@@ -134,7 +154,7 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 		Stream:      claudeReq.Stream,
 	}
 
-	// Enable usage tracking and reasoning - provider-specific
+	// Enable usage tracking and reasoning - provider-specific (streaming only)
 	if claudeReq.Stream != nil && *claudeReq.Stream {
 		provider := cfg.DetectProvider()
 
@@ -160,13 +180,6 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 				"include_usage": true,
 			}
 			openaiReq.ReasoningEffort = "medium" // minimal | low | medium | high
-
-		case config.ProviderOllama:
-			// Ollama needs explicit tool_choice when tools are present
-			// Without this, Ollama models may not naturally choose to use tools
-			if len(claudeReq.Tools) > 0 {
-				openaiReq.ToolChoice = "required"
-			}
 		}
 	}
 
@@ -189,9 +202,20 @@ func ConvertRequest(claudeReq models.ClaudeRequest, cfg *config.Config) (*models
 		openaiReq.Stop = claudeReq.StopSequences
 	}
 
-	// Convert tools (if present)
+	// Convert tools and apply tool_choice filtering
 	if len(claudeReq.Tools) > 0 {
-		openaiReq.Tools = convertTools(claudeReq.Tools)
+		openaiTools := convertTools(claudeReq.Tools)
+		filteredTools, openaiChoice := filterToolsForChoice(openaiTools, claudeReq.ToolChoice)
+		openaiReq.Tools = filteredTools
+		if openaiChoice != nil {
+			openaiReq.ToolChoice = openaiChoice
+		}
+
+		// Ollama needs explicit tool_choice when tools are present and no specific choice set
+		// Without this, Ollama models may not naturally choose to use tools
+		if openaiReq.ToolChoice == nil && cfg.DetectProvider() == config.ProviderOllama {
+			openaiReq.ToolChoice = "required"
+		}
 	}
 
 	return openaiReq, nil
@@ -402,6 +426,40 @@ func convertTools(claudeTools []models.Tool) []models.OpenAITool {
 	}
 
 	return openaiTools
+}
+
+// filterToolsForChoice filters tools and translates tool_choice from Claude to OpenAI format.
+// When tool_choice targets a specific tool, only that tool is kept to reduce model confusion.
+// Returns (filtered tools, openai tool_choice value).
+func filterToolsForChoice(tools []models.OpenAITool, claudeChoice interface{}) ([]models.OpenAITool, interface{}) {
+	if claudeChoice == nil {
+		return tools, nil
+	}
+	switch v := claudeChoice.(type) {
+	case string:
+		switch v {
+		case "auto":
+			return tools, "auto"
+		case "any":
+			return tools, "required"
+		}
+	case map[string]interface{}:
+		if v["type"] == "tool" {
+			name, ok := v["name"].(string)
+			if !ok {
+				return tools, nil
+			}
+			for _, t := range tools {
+				if t.Function.Name == name {
+					return []models.OpenAITool{t}, map[string]interface{}{
+						"type":     "function",
+						"function": map[string]interface{}{"name": name},
+					}
+				}
+			}
+		}
+	}
+	return tools, nil
 }
 
 // ConvertResponse converts an OpenAI response to Claude format

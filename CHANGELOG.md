@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.15] - 2026-03-30
+
+### Added
+- **Tool choice filtering** — when `tool_choice` targets a specific tool, only that tool is sent to the backend, reducing model confusion
+  - Claude `{"type":"tool","name":"X"}` → OpenAI `{"type":"function","function":{"name":"X"}}` with filtered tools list
+  - Claude `"any"` → OpenAI `"required"` (forces tool usage)
+  - New `filterToolsForChoice()` in converter.go with safe type assertions (no panic on malformed input)
+  - Fixed: `ToolChoice` field was missing from `ClaudeRequest`, silently dropping all tool_choice directives
+  - Fixed: Ollama `tool_choice = "required"` was only applied in streaming path; now applied to both streaming and non-streaming
+- **Tool-result 400 retry with message flattening** — workaround for vLLM backends that reject multi-turn `role:"tool"` messages with HTTP 400
+  - On 400 errors with tool_results present, retries with messages flattened to plain text (assistant tool_calls → text, tool results → user messages)
+  - If flattened retry also fails, second retry strips all tools entirely
+  - Applies to both streaming (`callOpenAIStream`) and non-streaming (`callOpenAI`) paths
+  - Logs `[WARN] Backend 400 on tool_result` on first retry
+  - Non-breaking: backends that correctly support tool_results are unaffected
+- **Tool prompt augmentation** — prepends model-specific tool-use instructions to the system prompt for enterprise LLM gateways (vLLM/Mistral) that sometimes emit tool calls as plain text
+  - Auto-enabled for `ProviderUnknown` (e.g. Thales GenAI), disabled for OpenRouter/OpenAI/Ollama
+  - Per-model guidance for `codestral*`, `mistral-medium*`/`mistral-large*`, `mistral-small*`, default
+  - `PROXY_AUGMENT_TOOL_PROMPT=true/false` overrides auto-detection
+  - `PROXY_TOOL_PROMPT_TEMPLATE=<text>` overrides per-model guidance
+- **JSON repair** — fixes malformed tool call arguments in non-streaming responses
+  - Handles: markdown code blocks (` ```json {...} ``` `), XML `<arguments>` tags, missing IDs, extra whitespace
+  - `PROXY_REPAIR_TOOL_CALLS=false` disables (default: enabled)
+- **Loop breaker escalation** — extends v1.5.14 loop detection with severity levels
+  - Level 1 (gentle): `NudgeMessage` — try a different approach
+  - Level 2 (strong): `StrongNudgeMessage` — you must change strategy
+  - Level 3 (disable tools): tools are removed from the request to force text-based approach
+  - `PROXY_MAX_LOOP_LEVEL=1` or `2` caps the max level (default: 3)
+- **Tool telemetry** — `[TOOL]` log line when tools are used (simple log mode)
+  - Format: `[HH:MM:SS] [TOOL] model=X sent=N used=M name=tool1,tool2`
+  - Emitted in both streaming and non-streaming paths
+
+### Changed
+- `streamOpenAIToClaude()` signature: added `toolsSent int` parameter for telemetry
+
 ## [1.5.14] - 2026-03-28
 
 ### Added

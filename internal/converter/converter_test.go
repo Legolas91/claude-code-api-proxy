@@ -895,3 +895,186 @@ func BenchmarkConvertResponse(b *testing.B) {
 		ConvertResponse(openaiResp, "claude-sonnet-4-20250514")
 	}
 }
+
+// TestFilterToolsForChoice tests tool filtering and tool_choice translation
+func TestFilterToolsForChoice(t *testing.T) {
+	tools := []models.OpenAITool{
+		{Type: "function"},
+		{Type: "function"},
+		{Type: "function"},
+	}
+	tools[0].Function.Name = "read_file"
+	tools[0].Function.Description = "Read a file"
+	tools[1].Function.Name = "write_file"
+	tools[1].Function.Description = "Write a file"
+	tools[2].Function.Name = "list_dir"
+	tools[2].Function.Description = "List directory"
+
+	tests := []struct {
+		name            string
+		claudeChoice    interface{}
+		wantToolCount   int
+		wantToolName    string // if wantToolCount == 1
+		wantChoiceStr   string // expected string value of openaiChoice (if string)
+		wantChoiceIsMap bool   // expected openaiChoice is a map (specific tool)
+	}{
+		{
+			name:          "nil choice leaves tools unchanged",
+			claudeChoice:  nil,
+			wantToolCount: 3,
+		},
+		{
+			name:          "auto keeps all tools",
+			claudeChoice:  "auto",
+			wantToolCount: 3,
+			wantChoiceStr: "auto",
+		},
+		{
+			name:          "any keeps all tools and maps to required",
+			claudeChoice:  "any",
+			wantToolCount: 3,
+			wantChoiceStr: "required",
+		},
+		{
+			name:            "specific tool filters to one",
+			claudeChoice:    map[string]interface{}{"type": "tool", "name": "write_file"},
+			wantToolCount:   1,
+			wantToolName:    "write_file",
+			wantChoiceIsMap: true,
+		},
+		{
+			name:          "unknown tool name returns all unchanged",
+			claudeChoice:  map[string]interface{}{"type": "tool", "name": "nonexistent"},
+			wantToolCount: 3,
+		},
+		{
+			name:          "missing name key in map returns all unchanged",
+			claudeChoice:  map[string]interface{}{"type": "tool"},
+			wantToolCount: 3,
+		},
+		{
+			name:          "name not a string returns all unchanged",
+			claudeChoice:  map[string]interface{}{"type": "tool", "name": 42},
+			wantToolCount: 3,
+		},
+		{
+			name:          "unrecognized string choice returns tools unchanged",
+			claudeChoice:  "unknown_value",
+			wantToolCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTools, gotChoice := filterToolsForChoice(tools, tt.claudeChoice)
+
+			if len(gotTools) != tt.wantToolCount {
+				t.Errorf("filterToolsForChoice() tool count = %d, want %d", len(gotTools), tt.wantToolCount)
+			}
+
+			if tt.wantToolCount == 1 && tt.wantToolName != "" {
+				if gotTools[0].Function.Name != tt.wantToolName {
+					t.Errorf("filterToolsForChoice() tool name = %q, want %q", gotTools[0].Function.Name, tt.wantToolName)
+				}
+			}
+
+			if tt.wantChoiceStr != "" {
+				if gotChoice != tt.wantChoiceStr {
+					t.Errorf("filterToolsForChoice() choice = %v, want %q", gotChoice, tt.wantChoiceStr)
+				}
+			}
+
+			if tt.wantChoiceIsMap {
+				choiceMap, ok := gotChoice.(map[string]interface{})
+				if !ok {
+					t.Errorf("filterToolsForChoice() choice is not a map, got %T", gotChoice)
+					return
+				}
+				if choiceMap["type"] != "function" {
+					t.Errorf("filterToolsForChoice() choice type = %v, want \"function\"", choiceMap["type"])
+				}
+				fn, ok := choiceMap["function"].(map[string]interface{})
+				if !ok {
+					t.Errorf("filterToolsForChoice() choice.function is not a map")
+					return
+				}
+				if fn["name"] != tt.wantToolName {
+					t.Errorf("filterToolsForChoice() choice.function.name = %v, want %q", fn["name"], tt.wantToolName)
+				}
+			}
+
+			if tt.claudeChoice == nil && gotChoice != nil {
+				t.Errorf("filterToolsForChoice() choice = %v, want nil", gotChoice)
+			}
+		})
+	}
+}
+
+// TestAugmentSystemWithToolGuidance tests the system prompt augmentation logic
+func TestAugmentSystemWithToolGuidance(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name       string
+		systemText string
+		model      string
+		cfg        *config.Config
+		wantPrefix string
+		wantSuffix string
+	}{
+		{
+			name:       "empty system text → guidance only",
+			systemText: "",
+			model:      "gpt-5",
+			cfg:        &config.Config{},
+			wantPrefix: "When the user requests",
+			wantSuffix: "",
+		},
+		{
+			name:       "non-empty system → guidance prepended",
+			systemText: "You are a helpful assistant.",
+			model:      "gpt-5",
+			cfg:        &config.Config{},
+			wantPrefix: "When the user requests",
+			wantSuffix: "You are a helpful assistant.",
+		},
+		{
+			name:       "codestral model gets codestral guidance",
+			systemText: "Be concise.",
+			model:      "codestral-2503",
+			cfg:        &config.Config{},
+			wantPrefix: "You are a code-focused assistant",
+			wantSuffix: "Be concise.",
+		},
+		{
+			name:       "custom template overrides model-based guidance",
+			systemText: "System prompt.",
+			model:      "codestral-2503",
+			cfg:        &config.Config{ToolPromptTemplate: "CUSTOM GUIDANCE"},
+			wantPrefix: "CUSTOM GUIDANCE",
+			wantSuffix: "System prompt.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := augmentSystemWithToolGuidance(tt.systemText, tt.model, tt.cfg)
+			if tt.wantPrefix != "" && len(result) < len(tt.wantPrefix) {
+				t.Errorf("result too short: %q", result)
+				return
+			}
+			if tt.wantPrefix != "" && result[:len(tt.wantPrefix)] != tt.wantPrefix {
+				t.Errorf("expected prefix %q, got %q", tt.wantPrefix, result[:len(tt.wantPrefix)])
+			}
+			if tt.wantSuffix != "" && len(result) < len(tt.wantSuffix) {
+				t.Errorf("result too short for suffix check: %q", result)
+				return
+			}
+			if tt.wantSuffix != "" && result[len(result)-len(tt.wantSuffix):] != tt.wantSuffix {
+				t.Errorf("expected suffix %q, got %q", tt.wantSuffix, result[len(result)-len(tt.wantSuffix):])
+			}
+		})
+	}
+	// suppress unused import warning if needed
+	_ = boolPtr
+}

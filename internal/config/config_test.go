@@ -1135,3 +1135,61 @@ func restoreEnv(key, value string) {
 		os.Unsetenv(key)
 	}
 }
+
+// TestShouldAugmentToolPrompt tests the tri-state tool prompt augmentation logic
+func TestShouldAugmentToolPrompt(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name     string
+		cfg      *Config
+		provider ProviderType
+		want     bool
+	}{
+		{
+			name:     "auto + unknown provider → augment",
+			cfg:      &Config{AugmentToolPrompt: nil},
+			provider: ProviderUnknown,
+			want:     true,
+		},
+		{
+			name:     "auto + openrouter → no augment",
+			cfg:      &Config{AugmentToolPrompt: nil},
+			provider: ProviderOpenRouter,
+			want:     false,
+		},
+		{
+			name:     "auto + openai → no augment",
+			cfg:      &Config{AugmentToolPrompt: nil},
+			provider: ProviderOpenAI,
+			want:     false,
+		},
+		{
+			name:     "auto + ollama → no augment",
+			cfg:      &Config{AugmentToolPrompt: nil},
+			provider: ProviderOllama,
+			want:     false,
+		},
+		{
+			name:     "explicit true overrides auto for known provider",
+			cfg:      &Config{AugmentToolPrompt: boolPtr(true)},
+			provider: ProviderOpenRouter,
+			want:     true,
+		},
+		{
+			name:     "explicit false overrides auto for unknown provider",
+			cfg:      &Config{AugmentToolPrompt: boolPtr(false)},
+			provider: ProviderUnknown,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.ShouldAugmentToolPrompt(tt.provider)
+			if got != tt.want {
+				t.Errorf("ShouldAugmentToolPrompt(%v) = %v, want %v", tt.provider, got, tt.want)
+			}
+		})
+	}
+}

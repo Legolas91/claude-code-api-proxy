@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/claude-code-proxy/proxy/internal/config"
+	"github.com/claude-code-proxy/proxy/pkg/models"
 )
 
 // TestServerSetup tests that the server can be initialized
@@ -331,7 +332,7 @@ func TestStreamOpenAIToClaude_TextConversion(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -385,7 +386,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_ReasoningContent(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -420,7 +421,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_Reasoning(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -446,7 +447,7 @@ func TestStreamOpenAIToClaude_ThinkingBlocks_ReasoningDetails(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -473,7 +474,7 @@ func TestStreamOpenAIToClaude_ToolCalls(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -522,7 +523,7 @@ func TestStreamOpenAIToClaude_FinishReasons(t *testing.T) {
 			w := bufio.NewWriter(&buf)
 			cfg := &config.Config{}
 
-			streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+			streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 			w.Flush()
 
 			output := buf.String()
@@ -547,7 +548,7 @@ func TestStreamOpenAIToClaude_ThinkingOnlyResponse(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -582,7 +583,7 @@ func TestStreamOpenAIToClaude_UsageTracking(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -606,7 +607,7 @@ func TestStreamOpenAIToClaude_EmptyStream(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -780,7 +781,7 @@ func TestStreamOpenAIToClaude_MalformedJSON(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -803,7 +804,7 @@ func TestStreamOpenAIToClaude_EmptyChoices(t *testing.T) {
 	w := bufio.NewWriter(&buf)
 	cfg := &config.Config{}
 
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -831,7 +832,7 @@ func TestStreamOpenAIToClaude_InvalidChoiceType(t *testing.T) {
 	cfg := &config.Config{}
 
 	// Should not panic thanks to the type assertion check
-	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now())
+	streamOpenAIToClaude(w, strings.NewReader(input), "test-model", "claude-test-model", cfg, time.Now(), 0)
 	w.Flush()
 
 	output := buf.String()
@@ -839,5 +840,187 @@ func TestStreamOpenAIToClaude_InvalidChoiceType(t *testing.T) {
 	// Valid chunk after bad one should work
 	if !strings.Contains(output, `"ok"`) {
 		t.Error("Valid content after invalid choice type should be processed")
+	}
+}
+
+// TestHasToolResults tests detection of role:"tool" messages
+func TestHasToolResults(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []models.OpenAIMessage
+		want     bool
+	}{
+		{
+			name:     "no messages",
+			messages: []models.OpenAIMessage{},
+			want:     false,
+		},
+		{
+			name: "only user/assistant messages",
+			messages: []models.OpenAIMessage{
+				{Role: "user", Content: "hello"},
+				{Role: "assistant", Content: "hi"},
+			},
+			want: false,
+		},
+		{
+			name: "contains tool message",
+			messages: []models.OpenAIMessage{
+				{Role: "user", Content: "use a tool"},
+				{Role: "assistant", Content: nil, ToolCalls: []models.OpenAIToolCall{
+					{ID: "call_1", Type: "function"},
+				}},
+				{Role: "tool", Content: "result", ToolCallID: "call_1"},
+			},
+			want: true,
+		},
+		{
+			name: "tool message at end",
+			messages: []models.OpenAIMessage{
+				{Role: "user", Content: "hi"},
+				{Role: "tool", Content: "some result"},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasToolResults(tt.messages)
+			if got != tt.want {
+				t.Errorf("hasToolResults() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFlattenToolMessages tests conversion of tool_calls/tool messages to plain text
+func TestFlattenToolMessages(t *testing.T) {
+	t.Run("assistant with tool_calls becomes text", func(t *testing.T) {
+		tc := models.OpenAIToolCall{ID: "call_1", Type: "function"}
+		tc.Function.Name = "read_file"
+		tc.Function.Arguments = `{"path":"/tmp/foo"}`
+
+		messages := []models.OpenAIMessage{
+			{Role: "user", Content: "read this file"},
+			{Role: "assistant", ToolCalls: []models.OpenAIToolCall{tc}},
+		}
+
+		result := flattenToolMessages(messages)
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 messages, got %d", len(result))
+		}
+		if result[1].Role != "assistant" {
+			t.Errorf("expected role assistant, got %q", result[1].Role)
+		}
+		content, ok := result[1].Content.(string)
+		if !ok {
+			t.Fatalf("expected string content, got %T", result[1].Content)
+		}
+		if !strings.Contains(content, "read_file") {
+			t.Errorf("expected tool name in content, got %q", content)
+		}
+		if len(result[1].ToolCalls) != 0 {
+			t.Error("expected ToolCalls to be nil after flattening")
+		}
+	})
+
+	t.Run("role tool becomes user with bracketed result", func(t *testing.T) {
+		messages := []models.OpenAIMessage{
+			{Role: "tool", Content: "file contents here", ToolCallID: "call_1"},
+		}
+
+		result := flattenToolMessages(messages)
+
+		if len(result) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(result))
+		}
+		if result[0].Role != "user" {
+			t.Errorf("expected role user, got %q", result[0].Role)
+		}
+		content, _ := result[0].Content.(string)
+		if !strings.Contains(content, "[Tool result]") {
+			t.Errorf("expected [Tool result] prefix, got %q", content)
+		}
+		if !strings.Contains(content, "file contents here") {
+			t.Errorf("expected original content preserved, got %q", content)
+		}
+	})
+
+	t.Run("non-tool messages pass through unchanged", func(t *testing.T) {
+		messages := []models.OpenAIMessage{
+			{Role: "system", Content: "you are helpful"},
+			{Role: "user", Content: "hello"},
+			{Role: "assistant", Content: "hi there"},
+		}
+
+		result := flattenToolMessages(messages)
+
+		if len(result) != 3 {
+			t.Fatalf("expected 3 messages, got %d", len(result))
+		}
+		for i, msg := range result {
+			if msg.Role != messages[i].Role {
+				t.Errorf("message %d role changed: got %q, want %q", i, msg.Role, messages[i].Role)
+			}
+		}
+	})
+
+	t.Run("multiple tool calls in one assistant message", func(t *testing.T) {
+		tc1 := models.OpenAIToolCall{ID: "c1", Type: "function"}
+		tc1.Function.Name = "read_file"
+		tc1.Function.Arguments = `{"path":"a"}`
+		tc2 := models.OpenAIToolCall{ID: "c2", Type: "function"}
+		tc2.Function.Name = "write_file"
+		tc2.Function.Arguments = `{"path":"b","content":"x"}`
+
+		messages := []models.OpenAIMessage{
+			{Role: "assistant", ToolCalls: []models.OpenAIToolCall{tc1, tc2}},
+		}
+
+		result := flattenToolMessages(messages)
+
+		content, _ := result[0].Content.(string)
+		if !strings.Contains(content, "read_file") || !strings.Contains(content, "write_file") {
+			t.Errorf("expected both tool names in content, got %q", content)
+		}
+	})
+}
+
+// TestExtractToolResultContent tests content extraction from various Content types
+func TestExtractToolResultContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content interface{}
+		want    string
+	}{
+		{
+			name:    "string content",
+			content: "simple result",
+			want:    "simple result",
+		},
+		{
+			name: "array with text blocks",
+			content: []interface{}{
+				map[string]interface{}{"type": "text", "text": "part one"},
+				map[string]interface{}{"type": "text", "text": "part two"},
+			},
+			want: "part one\npart two",
+		},
+		{
+			name:    "nil content",
+			content: nil,
+			want:    "<nil>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractToolResultContent(tt.content)
+			if got != tt.want {
+				t.Errorf("extractToolResultContent() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

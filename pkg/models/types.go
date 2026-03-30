@@ -28,6 +28,7 @@ type ClaudeRequest struct {
 	Stream        *bool           `json:"stream,omitempty"`
 	System        interface{}     `json:"system,omitempty"` // Can be string OR array of content blocks
 	Tools         []Tool          `json:"tools,omitempty"`
+	ToolChoice    interface{}     `json:"tool_choice,omitempty"` // "auto", "any", or {"type":"tool","name":"..."}
 }
 
 // Tool represents a function/tool definition
