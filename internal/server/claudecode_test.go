@@ -154,7 +154,7 @@ func TestEstimateTokens(t *testing.T) {
 	}
 }
 
-func TestExtractSystemForCliPrint(t *testing.T) {
+func TestExtractSystemForClaudeCode(t *testing.T) {
 	tests := []struct {
 		name     string
 		system   interface{}
@@ -195,9 +195,9 @@ func TestExtractSystemForCliPrint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractSystemForCliPrint(tt.system)
+			got := extractSystemForClaudeCode(tt.system)
 			if got != tt.expected {
-				t.Errorf("extractSystemForCliPrint() = %q, want %q", got, tt.expected)
+				t.Errorf("extractSystemForClaudeCode() = %q, want %q", got, tt.expected)
 			}
 		})
 	}

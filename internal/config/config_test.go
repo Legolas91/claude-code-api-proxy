@@ -767,16 +767,19 @@ func TestGetProviderForTier(t *testing.T) {
 			wantModel:   "",
 		},
 		{
-			name: "sonnet with specific URL but default key",
+			// When a tier-specific URL is set without a key, the absent key is intentional
+			// (e.g. ProviderClaudeCode: api.anthropic.com without a key spawns claude -p).
+			// The default key must NOT be used as fallback in this case.
+			name: "sonnet with specific URL but no key — no fallback to default key",
 			cfg: Config{
-				OpenAIBaseURL:   "https://default.com/v1",
-				OpenAIAPIKey:    "default-key",
-				SonnetBaseURL:   "https://sonnet.com/v1",
-				SonnetModel:     "codestral",
+				OpenAIBaseURL: "https://default.com/v1",
+				OpenAIAPIKey:  "default-key",
+				SonnetBaseURL: "https://sonnet.com/v1",
+				SonnetModel:   "codestral",
 			},
 			tier:        "sonnet",
 			wantBaseURL: "https://sonnet.com/v1",
-			wantAPIKey:  "default-key",
+			wantAPIKey:  "",
 			wantModel:   "codestral",
 		},
 		{
@@ -1209,16 +1212,16 @@ func TestDetectProviderForURL(t *testing.T) {
 			expected: ProviderAnthropic,
 		},
 		{
-			name:     "Anthropic without API key → ProviderCliPrint",
+			name:     "Anthropic without API key → ProviderClaudeCode",
 			baseURL:  "https://api.anthropic.com",
 			apiKey:   "",
-			expected: ProviderCliPrint,
+			expected: ProviderClaudeCode,
 		},
 		{
-			name:     "Anthropic subdomain without key → ProviderCliPrint",
+			name:     "Anthropic subdomain without key → ProviderClaudeCode",
 			baseURL:  "https://api.anthropic.com/v1",
 			apiKey:   "",
-			expected: ProviderCliPrint,
+			expected: ProviderClaudeCode,
 		},
 		{
 			name:     "OpenRouter → ProviderOpenRouter",
@@ -1269,8 +1272,8 @@ func TestDetectProviderForURL(t *testing.T) {
 	}
 }
 
-// TestConfigValidationCliPrint tests that config validation accepts claude-p configurations
-func TestConfigValidationCliPrint(t *testing.T) {
+// TestConfigValidationClaudeCode tests that config validation accepts claude-p configurations
+func TestConfigValidationClaudeCode(t *testing.T) {
 	t.Run("anthropic.com without API key is valid (claude-p mode)", func(t *testing.T) {
 		os.Setenv("OPENAI_BASE_URL", "https://api.anthropic.com")
 		os.Unsetenv("OPENAI_API_KEY")

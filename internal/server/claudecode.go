@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -13,19 +14,17 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// handleCliPrintMessages handles requests routed to the claude -p backend.
+// handleClaudeCodeMessages handles requests routed to the claude -p backend.
 // It spawns `claude -p` using the user's Pro/Max subscription instead of
 // calling an API endpoint. Supports both streaming and non-streaming modes.
-func handleCliPrintMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config) error {
+func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config) error {
 	prompt := messagesToPrompt(claudeReq)
 
 	// Build claude CLI arguments
+	// Note: claude CLI does not support --max-tokens; token budget is managed by the subscription.
 	args := []string{"-p", prompt, "--output-format", "json"}
 	if claudeReq.Model != "" {
 		args = append(args, "--model", claudeReq.Model)
-	}
-	if claudeReq.MaxTokens > 0 {
-		args = append(args, "--max-tokens", fmt.Sprintf("%d", claudeReq.MaxTokens))
 	}
 
 	if cfg.Debug {
@@ -34,17 +33,18 @@ func handleCliPrintMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *c
 
 	isStreaming := claudeReq.Stream != nil && *claudeReq.Stream
 	if isStreaming {
-		return handleCliPrintStreaming(c, claudeReq, cfg, prompt)
+		return handleClaudeCodeStreaming(c, claudeReq, cfg, prompt)
 	}
 
-	return handleCliPrintNonStreaming(c, claudeReq, cfg, args)
+	return handleClaudeCodeNonStreaming(c, claudeReq, cfg, args)
 }
 
-// handleCliPrintNonStreaming runs `claude -p` and returns the result as a Claude API response.
-func handleCliPrintNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string) error {
+// handleClaudeCodeNonStreaming runs `claude -p` and returns the result as a Claude API response.
+func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string) error {
 	startTime := time.Now()
 
 	cmd := exec.Command("claude", args...) //nolint:gosec
+	cmd.Env = claudeCodeEnv()
 	output, err := cmd.Output()
 	if err != nil {
 		errMsg := ""
@@ -110,17 +110,15 @@ func handleCliPrintNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cf
 	return c.JSON(claudeResp)
 }
 
-// handleCliPrintStreaming runs `claude -p` with streaming output and emits Claude SSE events.
-func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, prompt string) error {
+// handleClaudeCodeStreaming runs `claude -p` with streaming output and emits Claude SSE events.
+func handleClaudeCodeStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, prompt string) error {
 	startTime := time.Now()
 
 	// Build args for streaming (use stream-json for structured output)
+	// Note: claude CLI does not support --max-tokens; token budget is managed by the subscription.
 	args := []string{"-p", prompt, "--output-format", "stream-json"}
 	if claudeReq.Model != "" {
 		args = append(args, "--model", claudeReq.Model)
-	}
-	if claudeReq.MaxTokens > 0 {
-		args = append(args, "--max-tokens", fmt.Sprintf("%d", claudeReq.MaxTokens))
 	}
 
 	if cfg.Debug {
@@ -165,6 +163,7 @@ func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *
 		_ = w.Flush()
 
 		cmd := exec.Command("claude", args...) //nolint:gosec
+		cmd.Env = claudeCodeEnv()
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			writeSSEError(w, fmt.Sprintf("failed to create pipe: %v", err))
@@ -191,7 +190,7 @@ func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *
 			var event map[string]interface{}
 			if err := json.Unmarshal([]byte(line), &event); err != nil {
 				// Not JSON — treat as raw text chunk
-				streamCliPrintTextDelta(w, line, 0)
+				streamClaudeCodeTextDelta(w, line, 0)
 				totalOutput += len(line)
 				continue
 			}
@@ -203,7 +202,7 @@ func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *
 				// assistant message event — may contain text content
 				if message, ok := event["message"].(map[string]interface{}); ok {
 					if content, ok := message["content"].(string); ok && content != "" {
-						streamCliPrintTextDelta(w, content, 0)
+						streamClaudeCodeTextDelta(w, content, 0)
 						totalOutput += len(content)
 					}
 				}
@@ -211,20 +210,20 @@ func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *
 				// Already in Claude format — forward delta
 				if delta, ok := event["delta"].(map[string]interface{}); ok {
 					if text, ok := delta["text"].(string); ok && text != "" {
-						streamCliPrintTextDelta(w, text, 0)
+						streamClaudeCodeTextDelta(w, text, 0)
 						totalOutput += len(text)
 					}
 				}
 			case "result":
 				// Final result event
 				if result, ok := event["result"].(string); ok && result != "" {
-					streamCliPrintTextDelta(w, result, 0)
+					streamClaudeCodeTextDelta(w, result, 0)
 					totalOutput += len(result)
 				}
 			default:
 				// Unknown event type — try to extract text content
 				if text, ok := event["text"].(string); ok && text != "" {
-					streamCliPrintTextDelta(w, text, 0)
+					streamClaudeCodeTextDelta(w, text, 0)
 					totalOutput += len(text)
 				}
 			}
@@ -273,8 +272,8 @@ func handleCliPrintStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *
 	return nil
 }
 
-// streamCliPrintTextDelta emits a single text_delta SSE event.
-func streamCliPrintTextDelta(w *bufio.Writer, text string, index int) {
+// streamClaudeCodeTextDelta emits a single text_delta SSE event.
+func streamClaudeCodeTextDelta(w *bufio.Writer, text string, index int) {
 	writeSSEEvent(w, "content_block_delta", map[string]interface{}{
 		"type":  "content_block_delta",
 		"index": index,
@@ -292,7 +291,7 @@ func messagesToPrompt(req models.ClaudeRequest) string {
 	var parts []string
 
 	// Include system prompt if present
-	systemText := extractSystemForCliPrint(req.System)
+	systemText := extractSystemForClaudeCode(req.System)
 	if systemText != "" {
 		parts = append(parts, systemText)
 	}
@@ -337,8 +336,8 @@ func messagesToPrompt(req models.ClaudeRequest) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// extractSystemForCliPrint extracts system text from Claude's flexible system parameter.
-func extractSystemForCliPrint(system interface{}) string {
+// extractSystemForClaudeCode extracts system text from Claude's flexible system parameter.
+func extractSystemForClaudeCode(system interface{}) string {
 	if system == nil {
 		return ""
 	}
@@ -371,14 +370,23 @@ func estimateTokens(text string) int {
 	return tokens
 }
 
-// writeSSEError writes an error event to the SSE stream.
-func writeSSEError(w *bufio.Writer, message string) {
-	writeSSEEvent(w, "error", map[string]interface{}{
-		"type": "error",
-		"error": map[string]interface{}{
-			"type":    "api_error",
-			"message": message,
-		},
-	})
-	_ = w.Flush()
+// claudeCodeEnv returns a filtered environment for the claude subprocess.
+// ANTHROPIC_BASE_URL and ANTHROPIC_API_URL are stripped so that the child
+// process connects directly to Anthropic instead of looping back to the proxy.
+func claudeCodeEnv() []string {
+	skip := map[string]bool{
+		"ANTHROPIC_BASE_URL": true,
+		"ANTHROPIC_API_URL":  true,
+	}
+	var env []string
+	for _, e := range os.Environ() {
+		key := e
+		if idx := strings.IndexByte(e, '='); idx >= 0 {
+			key = e[:idx]
+		}
+		if !skip[key] {
+			env = append(env, e)
+		}
+	}
+	return env
 }

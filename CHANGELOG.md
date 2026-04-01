@@ -10,12 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.5.17] - 2026-04-01
 
 ### Added
-- **`claude -p` backend** (`internal/server/cliprint.go`) — new backend type that spawns `claude -p` instead of calling an HTTP API, enabling use of a Pro/Max Claude subscription without an API key
+- **`claude -p` backend** (`internal/server/claudecode.go`) — new backend type that spawns `claude -p` instead of calling an HTTP API, enabling use of a Pro/Max Claude subscription without an API key
   - Activated automatically when `OPENAI_BASE_URL=https://api.anthropic.com` and no API key is set
-  - New `ProviderCliPrint` provider type in `config.go`
+  - New `ProviderClaudeCode` provider type in `config.go`
   - Supports both streaming and non-streaming modes
   - Parses structured JSON output from `claude --output-format json`
-  - Renamed throughout from `claudep` → `cliprint` (files, types, functions) for clarity
+  - Renamed throughout from `claudep` → `claudecode` (files, types, functions) for clarity
 
 ## [1.5.16] - 2026-03-30
 

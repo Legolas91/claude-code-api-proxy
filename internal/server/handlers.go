@@ -183,15 +183,15 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 
 	// Detect per-tier provider type — route to claude-p if api.anthropic.com without API key
 	tierProvider := config.DetectProviderForURL(baseURL, apiKey)
-	if tierProvider == config.ProviderCliPrint {
+	if tierProvider == config.ProviderClaudeCode {
 		if cfg.Debug {
-			fmt.Printf("[DEBUG] Tier %s → ProviderCliPrint (no API key for %s)\n", tier, baseURL)
+			fmt.Printf("[DEBUG] Tier %s → ProviderClaudeCode (no API key for %s)\n", tier, baseURL)
 		}
 		if cfg.SimpleLog {
 			timestamp := time.Now().Format("15:04:05")
 			fmt.Printf("[%s] [ROUTE] %s → claude-p (model=%s)\n", timestamp, tier, claudeReq.Model)
 		}
-		return handleCliPrintMessages(c, claudeReq, cfg)
+		return handleClaudeCodeMessages(c, claudeReq, cfg)
 	}
 
 	// Convert Claude request to OpenAI format

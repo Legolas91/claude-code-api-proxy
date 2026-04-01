@@ -27,7 +27,7 @@ const (
 	ProviderOpenAI     ProviderType = "openai"
 	ProviderOllama     ProviderType = "ollama"
 	ProviderAnthropic  ProviderType = "anthropic" // Direct Anthropic API passthrough (with API key)
-	ProviderCliPrint    ProviderType = "cliprint"   // Claude CLI backend (Pro/Max subscription, no API key)
+	ProviderClaudeCode  ProviderType = "claudecode" // Claude CLI backend (Pro/Max subscription, no API key)
 	ProviderUnknown    ProviderType = "unknown"
 )
 
@@ -280,7 +280,7 @@ func (c *Config) IsLocalhost() bool {
 // DetectProviderForURL identifies the provider type for a specific base URL and API key.
 // This enables per-tier provider detection (different tiers can use different providers).
 //   - "api.anthropic.com" + API key present → ProviderAnthropic (passthrough)
-//   - "api.anthropic.com" + no API key      → ProviderCliPrint (spawn claude -p)
+//   - "api.anthropic.com" + no API key      → ProviderClaudeCode (spawn claude -p)
 //   - Other URLs                            → standard detection (OpenRouter/OpenAI/Ollama/Unknown)
 func DetectProviderForURL(baseURL, apiKey string) ProviderType {
 	u := strings.ToLower(baseURL)
@@ -289,7 +289,7 @@ func DetectProviderForURL(baseURL, apiKey string) ProviderType {
 		if apiKey != "" {
 			return ProviderAnthropic
 		}
-		return ProviderCliPrint
+		return ProviderClaudeCode
 	}
 	if strings.Contains(u, "openrouter.ai") {
 		return ProviderOpenRouter
@@ -307,26 +307,33 @@ func DetectProviderForURL(baseURL, apiKey string) ProviderType {
 // Falls back to default values (OpenAIBaseURL, OpenAIAPIKey) if tier-specific values are not set.
 // This enables optional multi-provider routing where different Claude tiers can use different APIs.
 func (c *Config) GetProviderForTier(tier string) (baseURL, apiKey, model string) {
+	var hasExplicitURL bool
 	switch tier {
 	case "opus":
 		baseURL = c.OpusBaseURL
 		apiKey = c.OpusAPIKey
 		model = c.OpusModel
+		hasExplicitURL = c.OpusBaseURL != ""
 	case "sonnet":
 		baseURL = c.SonnetBaseURL
 		apiKey = c.SonnetAPIKey
 		model = c.SonnetModel
+		hasExplicitURL = c.SonnetBaseURL != ""
 	case "haiku":
 		baseURL = c.HaikuBaseURL
 		apiKey = c.HaikuAPIKey
 		model = c.HaikuModel
+		hasExplicitURL = c.HaikuBaseURL != ""
 	}
 
 	// Fallback to default values if tier-specific not set
 	if baseURL == "" {
 		baseURL = c.OpenAIBaseURL
 	}
-	if apiKey == "" {
+	// Only fallback apiKey if no explicit URL was configured for this tier.
+	// When a tier-specific URL is set without an API key, the absence is intentional
+	// (e.g. ProviderClaudeCode: api.anthropic.com without a key spawns claude -p).
+	if apiKey == "" && !hasExplicitURL {
 		apiKey = c.OpenAIAPIKey
 	}
 
