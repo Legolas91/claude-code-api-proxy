@@ -18,10 +18,11 @@ GOFMT=$(GOCMD) fmt
 
 # Version (injected at build time via git tag, fallback to "dev")
 VERSION?=$(shell git describe --tags --exact-match 2>/dev/null || echo "dev")
+COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 VERSION_PKG=github.com/claude-code-proxy/proxy/internal/version
 
 # Build flags
-LDFLAGS=-ldflags "-s -w -X $(VERSION_PKG).Version=$(VERSION)"
+LDFLAGS=-ldflags "-s -w -X $(VERSION_PKG).Version=$(VERSION) -X $(VERSION_PKG).Commit=$(COMMIT)"
 
 # Default target
 all: build

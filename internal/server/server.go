@@ -157,6 +157,7 @@ func Start(cfg *config.Config) error {
 		resp := fiber.Map{
 			"status":  "ok",
 			"version": version.Version,
+			"commit":  version.Commit,
 		}
 		if claudeCodeVersion != "" {
 			resp["claude_code_version"] = claudeCodeVersion
@@ -169,6 +170,7 @@ func Start(cfg *config.Config) error {
 		return c.JSON(fiber.Map{
 			"message": "Claude Code Proxy",
 			"version": version.Version,
+			"commit":  version.Commit,
 			"status":  "running",
 			"config": fiber.Map{
 				"openai_base_url": cfg.OpenAIBaseURL,

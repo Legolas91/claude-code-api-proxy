@@ -43,9 +43,10 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:VERSION
+          $commit = (git rev-parse --short HEAD 2>$null)
           $binary = "cc-api-proxy"
           $versionPkg = "github.com/claude-code-proxy/proxy/internal/version"
-          $ldflags = "-s -w -X ${versionPkg}.Version=${version}"
+          $ldflags = "-s -w -X ${versionPkg}.Version=${version} -X ${versionPkg}.Commit=${commit}"
 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
