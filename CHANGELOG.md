@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.18] - 2026-04-01
+
+### Added
+- **Build commit hash in API responses** — `GET /` and `GET /health` now include a `commit` field with the short git SHA injected at build time via `-ldflags`
+  - Eliminates ambiguity when rebuilding a binary with the same version tag
+  - Injected via `internal/version.Commit` (defaults to `"unknown"` if not set)
+  - Updated `Makefile` and `release.yml` to inject `Commit` alongside `Version`
+
 ## [1.5.17] - 2026-04-01
 
 ### Added
