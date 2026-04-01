@@ -26,6 +26,8 @@ const (
 	ProviderOpenRouter ProviderType = "openrouter"
 	ProviderOpenAI     ProviderType = "openai"
 	ProviderOllama     ProviderType = "ollama"
+	ProviderAnthropic  ProviderType = "anthropic" // Direct Anthropic API passthrough (with API key)
+	ProviderCliPrint    ProviderType = "cliprint"   // Claude CLI backend (Pro/Max subscription, no API key)
 	ProviderUnknown    ProviderType = "unknown"
 )
 
@@ -189,14 +191,22 @@ func Load() (*Config, error) {
 	}
 
 	// Validate required fields
-	// Allow missing API key for Ollama (localhost endpoints)
+	// Allow missing API key for:
+	// - Ollama (localhost endpoints)
+	// - Anthropic claude-p mode (api.anthropic.com without key → uses claude CLI subscription)
+	// - Per-tier configs where all tiers have their own keys/URLs
 	if cfg.OpenAIAPIKey == "" {
-		if !strings.Contains(cfg.OpenAIBaseURL, "localhost") &&
-			!strings.Contains(cfg.OpenAIBaseURL, "127.0.0.1") {
-			return nil, fmt.Errorf("OPENAI_API_KEY is required (unless using localhost/Ollama)")
+		isLocalhost := strings.Contains(cfg.OpenAIBaseURL, "localhost") ||
+			strings.Contains(cfg.OpenAIBaseURL, "127.0.0.1")
+		isAnthropic := strings.Contains(strings.ToLower(cfg.OpenAIBaseURL), "anthropic.com")
+		hasAllTierURLs := cfg.OpusBaseURL != "" && cfg.SonnetBaseURL != "" && cfg.HaikuBaseURL != ""
+
+		if !isLocalhost && !isAnthropic && !hasAllTierURLs {
+			return nil, fmt.Errorf("OPENAI_API_KEY is required (unless using localhost/Ollama, anthropic.com/claude-p, or per-tier URLs)")
 		}
-		// Set dummy key for Ollama
-		cfg.OpenAIAPIKey = "ollama"
+		if isLocalhost {
+			cfg.OpenAIAPIKey = "ollama"
+		}
 	}
 
 	return cfg, nil
@@ -265,6 +275,32 @@ func (c *Config) DetectProvider() ProviderType {
 func (c *Config) IsLocalhost() bool {
 	baseURL := strings.ToLower(c.OpenAIBaseURL)
 	return strings.Contains(baseURL, "localhost") || strings.Contains(baseURL, "127.0.0.1")
+}
+
+// DetectProviderForURL identifies the provider type for a specific base URL and API key.
+// This enables per-tier provider detection (different tiers can use different providers).
+//   - "api.anthropic.com" + API key present → ProviderAnthropic (passthrough)
+//   - "api.anthropic.com" + no API key      → ProviderCliPrint (spawn claude -p)
+//   - Other URLs                            → standard detection (OpenRouter/OpenAI/Ollama/Unknown)
+func DetectProviderForURL(baseURL, apiKey string) ProviderType {
+	u := strings.ToLower(baseURL)
+
+	if strings.Contains(u, "anthropic.com") {
+		if apiKey != "" {
+			return ProviderAnthropic
+		}
+		return ProviderCliPrint
+	}
+	if strings.Contains(u, "openrouter.ai") {
+		return ProviderOpenRouter
+	}
+	if strings.Contains(u, "api.openai.com") {
+		return ProviderOpenAI
+	}
+	if strings.Contains(u, "localhost") || strings.Contains(u, "127.0.0.1") {
+		return ProviderOllama
+	}
+	return ProviderUnknown
 }
 
 // GetProviderForTier returns the provider configuration (baseURL, apiKey, model) for a given tier.

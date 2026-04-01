@@ -1193,3 +1193,121 @@ func TestShouldAugmentToolPrompt(t *testing.T) {
 		})
 	}
 }
+
+// TestDetectProviderForURL tests per-tier provider detection based on URL + API key presence
+func TestDetectProviderForURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseURL  string
+		apiKey   string
+		expected ProviderType
+	}{
+		{
+			name:     "Anthropic with API key → ProviderAnthropic",
+			baseURL:  "https://api.anthropic.com",
+			apiKey:   "sk-ant-xxx",
+			expected: ProviderAnthropic,
+		},
+		{
+			name:     "Anthropic without API key → ProviderCliPrint",
+			baseURL:  "https://api.anthropic.com",
+			apiKey:   "",
+			expected: ProviderCliPrint,
+		},
+		{
+			name:     "Anthropic subdomain without key → ProviderCliPrint",
+			baseURL:  "https://api.anthropic.com/v1",
+			apiKey:   "",
+			expected: ProviderCliPrint,
+		},
+		{
+			name:     "OpenRouter → ProviderOpenRouter",
+			baseURL:  "https://openrouter.ai/api/v1",
+			apiKey:   "sk-or-xxx",
+			expected: ProviderOpenRouter,
+		},
+		{
+			name:     "OpenAI Direct → ProviderOpenAI",
+			baseURL:  "https://api.openai.com/v1",
+			apiKey:   "sk-xxx",
+			expected: ProviderOpenAI,
+		},
+		{
+			name:     "Localhost → ProviderOllama",
+			baseURL:  "http://localhost:11434/v1",
+			apiKey:   "",
+			expected: ProviderOllama,
+		},
+		{
+			name:     "127.0.0.1 → ProviderOllama",
+			baseURL:  "http://127.0.0.1:11434/v1",
+			apiKey:   "",
+			expected: ProviderOllama,
+		},
+		{
+			name:     "Unknown provider → ProviderUnknown",
+			baseURL:  "https://api.mammouth.ai/v1",
+			apiKey:   "sk-mmai-xxx",
+			expected: ProviderUnknown,
+		},
+		{
+			name:     "Empty URL → ProviderUnknown",
+			baseURL:  "",
+			apiKey:   "",
+			expected: ProviderUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DetectProviderForURL(tt.baseURL, tt.apiKey)
+			if got != tt.expected {
+				t.Errorf("DetectProviderForURL(%q, %q) = %v, want %v",
+					tt.baseURL, tt.apiKey, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestConfigValidationCliPrint tests that config validation accepts claude-p configurations
+func TestConfigValidationCliPrint(t *testing.T) {
+	t.Run("anthropic.com without API key is valid (claude-p mode)", func(t *testing.T) {
+		os.Setenv("OPENAI_BASE_URL", "https://api.anthropic.com")
+		os.Unsetenv("OPENAI_API_KEY")
+		os.Unsetenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL")
+		os.Unsetenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL")
+		os.Unsetenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL")
+		defer func() {
+			os.Unsetenv("OPENAI_BASE_URL")
+		}()
+
+		cfg, err := Load()
+		if err != nil {
+			t.Errorf("Load() should not fail for anthropic.com without API key, got: %v", err)
+		}
+		if cfg != nil && cfg.OpenAIAPIKey != "" {
+			t.Errorf("OpenAIAPIKey should remain empty for claude-p mode, got %q", cfg.OpenAIAPIKey)
+		}
+	})
+
+	t.Run("per-tier URLs without global API key is valid", func(t *testing.T) {
+		os.Setenv("OPENAI_BASE_URL", "https://api.mammouth.ai/v1")
+		os.Unsetenv("OPENAI_API_KEY")
+		os.Setenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL", "https://api.anthropic.com")
+		os.Setenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL", "https://api.mammouth.ai/v1")
+		os.Setenv("ANTHROPIC_DEFAULT_SONNET_API_KEY", "sk-mmai-xxx")
+		os.Setenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL", "http://localhost:11434/v1")
+		defer func() {
+			os.Unsetenv("OPENAI_BASE_URL")
+			os.Unsetenv("ANTHROPIC_DEFAULT_OPUS_BASE_URL")
+			os.Unsetenv("ANTHROPIC_DEFAULT_SONNET_BASE_URL")
+			os.Unsetenv("ANTHROPIC_DEFAULT_SONNET_API_KEY")
+			os.Unsetenv("ANTHROPIC_DEFAULT_HAIKU_BASE_URL")
+		}()
+
+		_, err := Load()
+		if err != nil {
+			t.Errorf("Load() should not fail when all tier URLs are set, got: %v", err)
+		}
+	})
+}
