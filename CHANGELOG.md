@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.20] - 2026-04-04
+
+### Added
+- **Response cache** (`internal/cache/`) — opt-in in-memory LRU cache for non-streaming, deterministic responses
+  - `Store` interface enables future backend swap (Redis, SQLite) without touching handler code
+  - `MemoryStore`: LRU eviction using `container/list` (stdlib), thread-safe via `sync.Mutex`, O(1) get/set
+  - `ComputeKey`: SHA-256 of canonical request fields (model, system, messages, tools, tool_choice, temperature, max_tokens, top_p, stop_sequences) — excludes `stream`
+  - Streaming requests and requests with `temperature > PROXY_CACHE_MAX_TEMPERATURE` are never cached
+  - `X-Cache: HIT` / `X-Cache: MISS` debug headers on eligible responses
+  - `[CACHE] HIT key=...` / `[CACHE] STORE key=...` log lines in simple log mode (`-s`)
+  - ProviderClaudeCode non-streaming path is also cacheable (key computed before provider routing)
+  - Zero new external dependencies
+
+### Configuration
+- `PROXY_CACHE_ENABLED=false` — opt-in (default: disabled)
+- `PROXY_CACHE_MAX_ENTRIES=100` — LRU eviction threshold
+- `PROXY_CACHE_MAX_TEMPERATURE=0` — only cache requests with `temperature <= value`
+
+### Fixed
+- **Config test isolation** — added `TestMain` in `internal/config/config_test.go` that redirects `HOME` to a tmpdir, preventing `godotenv.Overload()` from loading `~/.claude/proxy.env` and corrupting test env vars
+
 ## [1.5.19] - 2026-04-03
 
 ### Fixed

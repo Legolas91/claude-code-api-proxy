@@ -18,6 +18,8 @@ make build
 make build-all
 
 # Run tests
+# NOTE: run inside the devcontainer (proxy-llm-devcontainer), not natively on Windows.
+# Some tests rely on Unix signals (daemon) and require HOME isolation (config).
 go test ./...
 
 # Run specific test file
@@ -34,6 +36,16 @@ go fmt ./...
 
 # Compile and start proxy in simple log mode
 go build -o cc-api-proxy cmd/cc-api-proxy/main.go && ./cc-api-proxy -s
+```
+
+### Running tests from host (Windows)
+
+```powershell
+# All Go unit tests — must run in devcontainer (Linux)
+docker exec proxy-llm-devcontainer bash -c "cd /workspace/claude-code-api-proxy && go test ./..."
+
+# Functional proxy tests (proxy must be started first)
+docker exec proxy-llm-devcontainer bash -c "test-proxy"
 ```
 
 ## Architecture
@@ -317,6 +329,24 @@ CLAUDE_PROXY_FROM_ENV=false # Ignore system proxy completely
 - `TestGetHTTPTransport` validates proxy routing logic
 - `TestShouldBypassProxy` validates NO_PROXY pattern matching
 
+### Response Cache
+
+In-memory LRU cache for non-streaming, deterministic responses. Reduces latency and token usage when Claude Code repeats identical requests (e.g. during development/debug).
+
+**Configuration:**
+- `PROXY_CACHE_ENABLED=false` — opt-in (default: disabled)
+- `PROXY_CACHE_MAX_ENTRIES=100` — maximum cached entries (LRU eviction)
+- `PROXY_CACHE_MAX_TEMPERATURE=0` — only cache when `temperature <= value`
+
+**Behaviour:**
+- Cache key: SHA-256 of `(model, system, messages, tools, tool_choice, temperature, max_tokens, top_p, stop_sequences)`
+- Streaming requests are never cached
+- Cache is in-memory only — cleared on restart (no TTL needed)
+- Debug header: `X-Cache: HIT` or `X-Cache: MISS` on eligible responses
+- Logging: `[CACHE] HIT key=...` / `[CACHE] STORE key=...` in simple log mode
+
+**Extension point:** `internal/cache/Store` interface — swap to Redis or any backend without changing handler code.
+
 ## Testing Strategy
 
 The test suite has two main categories:
@@ -494,6 +524,7 @@ When testing locally, use `-d` flag for debug logging to see full requests/respo
 - `internal/server/` - HTTP server (Fiber), request handlers, streaming
 - `internal/daemon/` - Process management, PID file handling
 - `internal/loop/` - Retry loop detection and nudge injection
+- `internal/cache/` - Response cache (Store interface + MemoryStore LRU)
 - `pkg/models/` - Shared type definitions for Claude and OpenAI formats
 - `scripts/ccp` - Wrapper script that starts daemon and execs Claude Code
 
