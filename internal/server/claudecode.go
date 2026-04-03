@@ -20,15 +20,15 @@ import (
 func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config) error {
 	prompt := messagesToPrompt(claudeReq)
 
-	// Build claude CLI arguments
+	// Build claude CLI arguments — prompt is passed via stdin to avoid ARG_MAX limit.
 	// Note: claude CLI does not support --max-tokens; token budget is managed by the subscription.
-	args := []string{"-p", prompt, "--output-format", "json"}
+	args := []string{"-p", "--output-format", "json"}
 	if claudeReq.Model != "" {
 		args = append(args, "--model", claudeReq.Model)
 	}
 
 	if cfg.Debug {
-		fmt.Printf("[DEBUG] claude-p: spawning claude %s\n", strings.Join(args, " "))
+		fmt.Printf("[DEBUG] claude-p: spawning claude %v (prompt: %d bytes via stdin)\n", args, len(prompt))
 	}
 
 	isStreaming := claudeReq.Stream != nil && *claudeReq.Stream
@@ -36,15 +36,16 @@ func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg 
 		return handleClaudeCodeStreaming(c, claudeReq, cfg, prompt)
 	}
 
-	return handleClaudeCodeNonStreaming(c, claudeReq, cfg, args)
+	return handleClaudeCodeNonStreaming(c, claudeReq, cfg, args, prompt)
 }
 
 // handleClaudeCodeNonStreaming runs `claude -p` and returns the result as a Claude API response.
-func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string) error {
+func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string, prompt string) error {
 	startTime := time.Now()
 
 	cmd := exec.Command("claude", args...) //nolint:gosec
 	cmd.Env = claudeCodeEnv()
+	cmd.Stdin = strings.NewReader(prompt)
 	output, err := cmd.Output()
 	if err != nil {
 		errMsg := ""
@@ -116,13 +117,13 @@ func handleClaudeCodeStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg
 
 	// Build args for streaming (use stream-json for structured output)
 	// Note: claude CLI does not support --max-tokens; token budget is managed by the subscription.
-	args := []string{"-p", prompt, "--output-format", "stream-json"}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose"}
 	if claudeReq.Model != "" {
 		args = append(args, "--model", claudeReq.Model)
 	}
 
 	if cfg.Debug {
-		fmt.Printf("[DEBUG] claude-p stream: spawning claude %s\n", strings.Join(args, " "))
+		fmt.Printf("[DEBUG] claude-p stream: spawning claude %v (prompt: %d bytes via stdin)\n", args, len(prompt))
 	}
 
 	// Set SSE headers
@@ -164,6 +165,7 @@ func handleClaudeCodeStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg
 
 		cmd := exec.Command("claude", args...) //nolint:gosec
 		cmd.Env = claudeCodeEnv()
+		cmd.Stdin = strings.NewReader(prompt)
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			writeSSEError(w, fmt.Sprintf("failed to create pipe: %v", err))
