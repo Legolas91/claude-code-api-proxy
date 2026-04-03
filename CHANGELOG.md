@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.19] - 2026-04-03
+
+### Fixed
+- **ProviderClaudeCode: pass prompt via stdin** — avoids `ARG_MAX` limit on long prompts by piping the prompt through stdin instead of passing it as a CLI argument
+- **Streaming: add `--verbose` flag** — `stream-json` output format requires `--verbose` for structured event output
+
 ## [1.5.18] - 2026-04-01
 
 ### Added
