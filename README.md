@@ -5,9 +5,23 @@
 [![License: MIT](https://img.shields.io/github/license/Legolas91/claude-code-api-proxy)](LICENSE)
 [![Issues](https://img.shields.io/github/issues/Legolas91/claude-code-api-proxy)](https://github.com/Legolas91/claude-code-api-proxy/issues)
 
-> **Fork** of [nielspeter/claude-code-proxy](https://github.com/nielspeter/claude-code-proxy) — extended with per-tier multi-URL/multi-key routing, enterprise HTTP proxy support, adaptive model detection, and security fixes.
+> **Fork** of [nielspeter/claude-code-proxy](https://github.com/nielspeter/claude-code-proxy)
 
-`cc-api-proxy` translates Claude API requests into OpenAI-compatible format, enabling Claude Code to work with any OpenAI-compatible backend. Designed for enterprises operating in air-gapped environments or where access to public LLMs is restricted — primarily for use with models running on internal infrastructure — it also supports public providers such as OpenRouter, Ollama, Mammouth.ai, etc. Each Claude tier (Opus/Sonnet/Haiku) can be independently routed to a different provider URL and API key.
+Most Claude Code proxies stop at translating the API format. `cc-api-proxy` goes further: it is a **reliability and routing layer** built for environments — and backends — that weren't designed with Claude Code in mind.
+
+### What sets it apart
+
+| Problem | What other proxies do | What `cc-api-proxy` does |
+|---------|----------------------|--------------------------|
+| You need different models for different tasks | ❌ One provider for everything | ✅ **Per-tier routing**: Opus → cloud, Haiku → free local Ollama, different URL and key per tier |
+| You have a Claude Pro/Max subscription but no API key — or no API credits | ❌ Won't work | ✅ **ProviderClaudeCode**: routes through `claude -p` (OAuth session), no API key or credits needed |
+| Backend model gets stuck retrying the same tool call | ❌ Loops forever | ✅ **Retry loop detection**: injects a nudge after N identical tool calls |
+| Internet access requires a corporate proxy | ❌ Breaks silently | ✅ **Enterprise HTTP proxy**: `CLAUDE_HTTP_PROXY`, `NO_PROXY` patterns |
+| Air-gapped environment, no internet | ❌ Cannot reach providers | ✅ Routes to **internal infrastructure**, single binary, no runtime deps |
+| Backend ignores `tool_choice` and calls the wrong tool | ❌ Wrong tool called | ✅ **Tool choice filtering**: forwards only the targeted tool, reduces model confusion |
+| Enterprise vLLM/Mistral rejects tool results with HTTP 400 | ❌ Hard failure | ✅ **400-retry**: flattens messages and retries automatically |
+| Same prompt sent repeatedly during dev/debug | ❌ Wastes tokens every time | ✅ **Response cache**: in-memory LRU, `X-Cache` headers, `Store` interface (Redis-ready) |
+| New model doesn't support `max_completion_tokens` | ❌ Silent 400 errors | ✅ **Adaptive detection**: learns what each model supports, zero config |
 
 > **⚠️ Beta Software** — Core functionality works. Edge cases may have issues. Feedback welcome at https://github.com/Legolas91/claude-code-api-proxy/issues
 
@@ -27,6 +41,20 @@
   - Different provider URL per tier (Opus/Sonnet/Haiku)
   - Different API key per tier
   - Automatic fallback to `OPENAI_BASE_URL` / `OPENAI_API_KEY`
+- ✅ **Claude Subscription Backend** *(v1.5.17+)* - Use your Pro/Max plan, no API key needed
+  - Routes any tier through `claude -p` CLI instead of an HTTP provider
+  - Supports streaming and non-streaming; strips `ANTHROPIC_BASE_URL` from subprocess to avoid loops
+  - Activated when tier `BASE_URL=https://api.anthropic.com` and no API key for that tier
+- ✅ **Retry Loop Detection** *(v1.5.14+)* - Prevents infinite tool-call loops
+  - Detects N consecutive identical `tool_use` calls (same name + input) in the message history
+  - Injects a nudge message to break the loop; configurable via `PROXY_MAX_IDENTICAL_RETRIES`
+- ✅ **Tool Reliability** *(v1.5.15+)* - Works with strict enterprise backends
+  - Tool choice filtering: only sends the targeted tool when `tool_choice` is specific
+  - 400-retry with message flattening when backend rejects `role:"tool"` messages
+- ✅ **Response Cache** *(v1.5.20+)* - Opt-in in-memory LRU cache
+  - Caches non-streaming, deterministic responses (temperature ≤ threshold)
+  - `X-Cache: HIT` / `X-Cache: MISS` debug headers; `[CACHE] HIT/STORE` log lines
+  - `Store` interface enables future swap to Redis or any backend
 - ✅ **Enterprise HTTP Proxy Support** *(v1.5.5+)* - Corporate environment ready
   - `CLAUDE_HTTP_PROXY` / `CLAUDE_HTTPS_PROXY` for outbound proxy
   - `CLAUDE_NO_PROXY` bypass list with pattern matching
@@ -35,6 +63,7 @@
   - Automatically learns which parameters each model supports
   - No hardcoded model patterns - works with any future model/provider
   - Per-model capability caching for instant subsequent requests
+- ✅ **Build Commit Hash** *(v1.5.18+)* - `GET /health` and `GET /` expose `commit` field (short SHA)
 - ✅ **Pattern-based routing** - Auto-detects Claude model tier and routes to configured backend
 - ✅ **Zero dependencies** - Single ~10MB binary, no runtime needed
 - ✅ **Daemon mode** - Runs in background, serves multiple Claude Code sessions
@@ -308,6 +337,21 @@ Route outbound requests through a corporate HTTP/HTTPS proxy.
   - If set, clients must provide this exact key
   - Leave unset to disable validation
 
+**Optional - Claude Subscription Backend (v1.5.17+):**
+
+Route a tier through `claude -p` (Pro/Max subscription) instead of an HTTP provider:
+```bash
+# Set tier BASE_URL to api.anthropic.com — no API key for that tier
+ANTHROPIC_DEFAULT_OPUS_BASE_URL=https://api.anthropic.com
+# ANTHROPIC_DEFAULT_OPUS_API_KEY is NOT set → activates ProviderClaudeCode for Opus
+```
+Requires `claude` CLI installed and authenticated (`claude login`).
+
+**Optional - Response Cache (v1.5.20+):**
+- `PROXY_CACHE_ENABLED` - Enable in-memory LRU cache (default: `false`)
+- `PROXY_CACHE_MAX_ENTRIES` - Max cached entries before LRU eviction (default: `100`)
+- `PROXY_CACHE_MAX_TEMPERATURE` - Only cache requests with `temperature <= value` (default: `0`)
+
 **Optional - Behavior:**
 - `PROXY_MAX_IDENTICAL_RETRIES` - Max consecutive identical tool calls before injecting a nudge to break retry loops (default: `3`, `0` = disabled)
 
@@ -324,11 +368,13 @@ claude-code-api-proxy/
 │   └── cc-api-proxy/
 │       └── main.go           # Entry point
 ├── internal/
-│   ├── config/               # Config loading
-│   ├── daemon/               # Process management
-│   ├── loop/                 # Retry loop detection
-│   ├── server/               # HTTP server (Fiber)
-│   └── converter/            # Claude ↔ OpenAI conversion
+│   ├── cache/                # Response cache (Store interface + MemoryStore LRU)
+│   ├── config/               # Config loading + provider detection + capability cache
+│   ├── converter/            # Claude ↔ OpenAI format conversion
+│   ├── daemon/               # Process management (PID file, start/stop/status)
+│   ├── loop/                 # Retry loop detection + nudge injection
+│   ├── server/               # HTTP server (Fiber): handlers, streaming, claudecode backend
+│   └── version/              # Version + commit hash (injected via ldflags)
 ├── pkg/
 │   └── models/               # Shared types
 ├── scripts/
