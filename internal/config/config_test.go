@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+// TestMain isolates config tests from the real ~/.claude/proxy.env present in the
+// devcontainer. Without this, godotenv.Overload() loads real credentials and
+// overwrites env vars set by individual tests.
+func TestMain(m *testing.M) {
+	tmpHome, err := os.MkdirTemp("", "config-test-home-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpHome)
+	os.Setenv("HOME", tmpHome)
+	os.Exit(m.Run())
+}
+
 // TestProviderDetection tests that we correctly identify providers from OPENAI_BASE_URL
 func TestProviderDetection(t *testing.T) {
 	tests := []struct {

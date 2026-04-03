@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/claude-code-proxy/proxy/internal/cache"
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/converter"
 	"github.com/claude-code-proxy/proxy/internal/daemon"
@@ -187,8 +188,15 @@ func Start(cfg *config.Config) error {
 		})
 	})
 
+	// Response cache (opt-in, in-memory LRU)
+	var responseCache cache.Store
+	if cfg.CacheEnabled {
+		responseCache = cache.NewMemoryStore(cfg.CacheMaxEntries)
+		fmt.Printf("   Cache: enabled (max_entries=%d, max_temp=%.1f)\n", cfg.CacheMaxEntries, cfg.CacheMaxTemperature)
+	}
+
 	// Claude API endpoints
-	setupClaudeEndpoints(app, cfg)
+	setupClaudeEndpoints(app, cfg, responseCache)
 
 	// Graceful shutdown
 	go func() {
@@ -273,14 +281,14 @@ func limitBodySize(maxSize int) fiber.Handler {
 	}
 }
 
-func setupClaudeEndpoints(app *fiber.App, cfg *config.Config) {
+func setupClaudeEndpoints(app *fiber.App, cfg *config.Config, responseCache cache.Store) {
 	// Body size limit: 10MB for messages, 1MB for token counting
-	const maxMessageBodySize = 10 * 1024 * 1024 // 10MB
+	const maxMessageBodySize = 10 * 1024 * 1024  // 10MB
 	const maxTokenCountBodySize = 1 * 1024 * 1024 // 1MB
 
 	// Messages endpoint - main Claude API
 	app.Post("/v1/messages", limitBodySize(maxMessageBodySize), func(c *fiber.Ctx) error {
-		return handleMessages(c, cfg)
+		return handleMessages(c, cfg, responseCache)
 	})
 
 	// Token counting endpoint

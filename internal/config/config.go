@@ -114,6 +114,11 @@ type Config struct {
 
 	// Repair malformed tool call arguments in non-streaming responses (true=repair, false=pass through)
 	RepairToolCalls bool
+
+	// Response cache (in-memory, non-streaming only, opt-in)
+	CacheEnabled        bool
+	CacheMaxEntries     int
+	CacheMaxTemperature float64
 }
 
 // Load reads configuration from environment variables
@@ -188,6 +193,11 @@ func Load() (*Config, error) {
 
 		// Repair malformed tool call arguments (default: enabled)
 		RepairToolCalls: getEnvAsBoolOrDefault("PROXY_REPAIR_TOOL_CALLS", true),
+
+		// Response cache (default: disabled)
+		CacheEnabled:        getEnvAsBoolOrDefault("PROXY_CACHE_ENABLED", false),
+		CacheMaxEntries:     getEnvAsIntOrDefault("PROXY_CACHE_MAX_ENTRIES", 100),
+		CacheMaxTemperature: getEnvAsFloatOrDefault("PROXY_CACHE_MAX_TEMPERATURE", 0),
 	}
 
 	// Validate required fields
@@ -250,6 +260,15 @@ func getEnvAsIntOrDefault(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if n, err := strconv.Atoi(value); err == nil && n >= 0 {
 			return n
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsFloatOrDefault(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
 		}
 	}
 	return defaultValue

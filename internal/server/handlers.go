@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/claude-code-proxy/proxy/internal/cache"
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/internal/converter"
 	"github.com/claude-code-proxy/proxy/internal/loop"
@@ -70,7 +71,7 @@ func addOpenRouterHeaders(req *http.Request, cfg *config.Config) {
 // handleMessages is the main handler for /v1/messages endpoint.
 // It parses Claude requests, converts them to OpenAI format, and routes to either
 // streaming or non-streaming handlers based on the request's stream parameter.
-func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
+func handleMessages(c *fiber.Ctx, cfg *config.Config, responseCache cache.Store) error {
 	// Debug: Log request (with sensitive data redacted)
 	if cfg.Debug {
 		fmt.Printf("\n=== CLAUDE REQUEST (redacted) ===\n%s\n==================================\n", redactSensitiveData(c.Body()))
@@ -177,6 +178,22 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 		}
 	}
 
+	// Response cache: check for a cached response (non-streaming only)
+	isStreaming := claudeReq.Stream != nil && *claudeReq.Stream
+	var cacheKey string
+	if responseCache != nil && !isStreaming && isCacheable(claudeReq, cfg.CacheMaxTemperature) {
+		cacheKey = cache.ComputeKey(claudeReq)
+		if cached := responseCache.Get(cacheKey); cached != nil {
+			c.Set("X-Cache", "HIT")
+			if cfg.SimpleLog {
+				timestamp := time.Now().Format("15:04:05")
+				fmt.Printf("[%s] [CACHE] HIT key=%s model=%s\n", timestamp, cacheKey[:12], claudeReq.Model)
+			}
+			return c.JSON(cached)
+		}
+		c.Set("X-Cache", "MISS")
+	}
+
 	// Get provider configuration for this tier (multi-URL routing support)
 	tier := converter.GetTierFromModel(claudeReq.Model)
 	baseURL, apiKey, _ := cfg.GetProviderForTier(tier)
@@ -191,7 +208,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 			timestamp := time.Now().Format("15:04:05")
 			fmt.Printf("[%s] [ROUTE] %s → claude-p (model=%s)\n", timestamp, tier, claudeReq.Model)
 		}
-		return handleClaudeCodeMessages(c, claudeReq, cfg)
+		return handleClaudeCodeMessages(c, claudeReq, cfg, cacheKey, responseCache)
 	}
 
 	// Convert Claude request to OpenAI format
@@ -342,6 +359,15 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config) error {
 					len(usedNames),
 					strings.Join(usedNames, ","))
 			}
+		}
+	}
+
+	// Store response in cache
+	if cacheKey != "" && responseCache != nil {
+		responseCache.Set(cacheKey, claudeResp)
+		if cfg.SimpleLog {
+			timestamp := time.Now().Format("15:04:05")
+			fmt.Printf("[%s] [CACHE] STORE key=%s model=%s entries=%d\n", timestamp, cacheKey[:12], claudeReq.Model, responseCache.Len())
 		}
 	}
 
@@ -1256,4 +1282,15 @@ func handleCountTokens(c *fiber.Ctx, cfg *config.Config) error {
 	return c.JSON(fiber.Map{
 		"input_tokens": estimatedTokens,
 	})
+}
+
+// isCacheable returns true when a request is eligible for response caching.
+// Only deterministic requests (temperature <= maxTemp) are cached.
+// A nil temperature is treated as 0.0 (fully deterministic).
+func isCacheable(req models.ClaudeRequest, maxTemp float64) bool {
+	temp := 0.0
+	if req.Temperature != nil {
+		temp = *req.Temperature
+	}
+	return temp <= maxTemp
 }

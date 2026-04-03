@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/claude-code-proxy/proxy/internal/cache"
 	"github.com/claude-code-proxy/proxy/internal/config"
 	"github.com/claude-code-proxy/proxy/pkg/models"
 	"github.com/gofiber/fiber/v2"
@@ -17,7 +18,7 @@ import (
 // handleClaudeCodeMessages handles requests routed to the claude -p backend.
 // It spawns `claude -p` using the user's Pro/Max subscription instead of
 // calling an API endpoint. Supports both streaming and non-streaming modes.
-func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config) error {
+func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, cacheKey string, responseCache cache.Store) error {
 	prompt := messagesToPrompt(claudeReq)
 
 	// Build claude CLI arguments — prompt is passed via stdin to avoid ARG_MAX limit.
@@ -36,11 +37,11 @@ func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg 
 		return handleClaudeCodeStreaming(c, claudeReq, cfg, prompt)
 	}
 
-	return handleClaudeCodeNonStreaming(c, claudeReq, cfg, args, prompt)
+	return handleClaudeCodeNonStreaming(c, claudeReq, cfg, args, prompt, cacheKey, responseCache)
 }
 
 // handleClaudeCodeNonStreaming runs `claude -p` and returns the result as a Claude API response.
-func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string, prompt string) error {
+func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string, prompt string, cacheKey string, responseCache cache.Store) error {
 	startTime := time.Now()
 
 	cmd := exec.Command("claude", args...) //nolint:gosec
@@ -106,6 +107,15 @@ func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, 
 		fmt.Printf("[%s] [REQ] claude-p model=%s in=%d out=%d tok/s=%.1f\n",
 			timestamp, claudeReq.Model,
 			claudeResp.Usage.InputTokens, claudeResp.Usage.OutputTokens, tokensPerSec)
+	}
+
+	// Store response in cache
+	if cacheKey != "" && responseCache != nil {
+		responseCache.Set(cacheKey, claudeResp)
+		if cfg.SimpleLog {
+			timestamp := time.Now().Format("15:04:05")
+			fmt.Printf("[%s] [CACHE] STORE key=%s model=%s entries=%d\n", timestamp, cacheKey[:12], claudeReq.Model, responseCache.Len())
+		}
 	}
 
 	return c.JSON(claudeResp)
