@@ -3,7 +3,7 @@ module github.com/claude-code-proxy/proxy
 go 1.26.1
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.11
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/joho/godotenv v1.5.1
 )
 
