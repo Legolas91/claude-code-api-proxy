@@ -339,7 +339,7 @@ In-memory LRU cache for non-streaming, deterministic responses. Reduces latency 
 - `PROXY_CACHE_MAX_TEMPERATURE=0` — only cache when `temperature <= value`
 
 **Behaviour:**
-- Cache key: SHA-256 of `(model, system, messages, tools, tool_choice, temperature, max_tokens, top_p, stop_sequences)`
+- Cache key: SHA-256 of `(baseURL, model, system, messages, tools, tool_choice, temperature, max_tokens, top_p, stop_sequences)` — `baseURL` ensures per-tier isolation when using multi-URL routing
 - Streaming requests are never cached
 - Cache is in-memory only — cleared on restart (no TTL needed)
 - Debug header: `X-Cache: HIT` or `X-Cache: MISS` on eligible responses

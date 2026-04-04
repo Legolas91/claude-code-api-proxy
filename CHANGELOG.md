@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.21] - 2026-04-04
+
+### Fixed
+- **Cache key includes provider base URL** — `ComputeKey` now takes the resolved `baseURL` as a parameter, ensuring that the same request routed to different providers (via per-tier multi-URL config) produces distinct cache keys. Previously, switching model tier (e.g. `/model haiku` → `/model sonnet`) could return a cached response from the wrong provider
+- **Cache lookup moved after tier resolution** — the provider tier (`GetProviderForTier`) is now resolved before the cache check, so `baseURL` is available for the cache key
+
+### Added
+- **`--help` documents response cache** — added `PROXY_CACHE_ENABLED`, `PROXY_CACHE_MAX_ENTRIES`, and `PROXY_CACHE_MAX_TEMPERATURE` to the CLI help output
+- **`TestComputeKey_DifferentBaseURL`** — new unit test verifying that different base URLs produce different cache keys
+
 ## [1.5.20] - 2026-04-04
 
 ### Added
