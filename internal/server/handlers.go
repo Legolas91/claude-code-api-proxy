@@ -178,11 +178,16 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config, responseCache cache.Store)
 		}
 	}
 
+	// Get provider configuration for this tier (multi-URL routing support)
+	// Must happen before cache lookup so baseURL is included in the cache key.
+	tier := converter.GetTierFromModel(claudeReq.Model)
+	baseURL, apiKey, _ := cfg.GetProviderForTier(tier)
+
 	// Response cache: check for a cached response (non-streaming only)
 	isStreaming := claudeReq.Stream != nil && *claudeReq.Stream
 	var cacheKey string
 	if responseCache != nil && !isStreaming && isCacheable(claudeReq, cfg.CacheMaxTemperature) {
-		cacheKey = cache.ComputeKey(claudeReq)
+		cacheKey = cache.ComputeKey(claudeReq, baseURL)
 		if cached := responseCache.Get(cacheKey); cached != nil {
 			c.Set("X-Cache", "HIT")
 			if cfg.SimpleLog {
@@ -193,10 +198,6 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config, responseCache cache.Store)
 		}
 		c.Set("X-Cache", "MISS")
 	}
-
-	// Get provider configuration for this tier (multi-URL routing support)
-	tier := converter.GetTierFromModel(claudeReq.Model)
-	baseURL, apiKey, _ := cfg.GetProviderForTier(tier)
 
 	// Detect per-tier provider type — route to claude-p if api.anthropic.com without API key
 	tierProvider := config.DetectProviderForURL(baseURL, apiKey)

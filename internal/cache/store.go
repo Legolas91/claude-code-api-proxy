@@ -99,7 +99,10 @@ func (m *MemoryStore) Len() int {
 // cacheKeyFields holds the fields of a ClaudeRequest that affect the response.
 // Stream is intentionally excluded: a cached response is valid for both
 // streaming and non-streaming callers (only non-streaming responses are stored).
+// BaseURL is included so the same request routed to different providers
+// (via per-tier multi-URL config) produces distinct cache keys.
 type cacheKeyFields struct {
+	BaseURL       string                   `json:"base_url"`
 	Model         string                   `json:"model"`
 	System        interface{}              `json:"system,omitempty"`
 	Messages      []models.ClaudeMessage   `json:"messages"`
@@ -113,8 +116,11 @@ type cacheKeyFields struct {
 
 // ComputeKey returns a deterministic SHA-256 hex digest for the given request.
 // Only fields that affect the response content are included.
-func ComputeKey(req models.ClaudeRequest) string {
+// baseURL is the resolved provider URL for this tier, ensuring that
+// the same Claude model routed to different backends produces different keys.
+func ComputeKey(req models.ClaudeRequest, baseURL string) string {
 	fields := cacheKeyFields{
+		BaseURL:       baseURL,
 		Model:         req.Model,
 		System:        req.System,
 		Messages:      req.Messages,

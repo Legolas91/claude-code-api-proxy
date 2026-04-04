@@ -141,6 +141,11 @@ Configuration:
     PROXY_MAX_IDENTICAL_RETRIES  Identical tool calls before nudge injection
                                  (default: 3, 0=disabled)
 
+  Response cache:
+    PROXY_CACHE_ENABLED          Enable response cache (default: false)
+    PROXY_CACHE_MAX_ENTRIES      Max cached entries, LRU eviction (default: 100)
+    PROXY_CACHE_MAX_TEMPERATURE  Only cache when temperature <= value (default: 0)
+
   Server:
     HOST                    Server host (default: 0.0.0.0)
     PORT                    Server port (default: 8082)

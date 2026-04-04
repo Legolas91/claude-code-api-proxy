@@ -119,8 +119,8 @@ func TestComputeKey_Deterministic(t *testing.T) {
 		Messages:  []models.ClaudeMessage{{Role: "user", Content: "hello"}},
 		MaxTokens: 100,
 	}
-	k1 := ComputeKey(req)
-	k2 := ComputeKey(req)
+	k1 := ComputeKey(req, "https://api.example.com/v1")
+	k2 := ComputeKey(req, "https://api.example.com/v1")
 	if k1 != k2 {
 		t.Errorf("same request produced different keys: %q vs %q", k1, k2)
 	}
@@ -135,7 +135,7 @@ func TestComputeKey_DifferentInputs(t *testing.T) {
 		Model:    "claude-sonnet-4-20250514",
 		Messages: []models.ClaudeMessage{{Role: "user", Content: "world"}},
 	}
-	if ComputeKey(req1) == ComputeKey(req2) {
+	if ComputeKey(req1, "https://api.example.com/v1") == ComputeKey(req2, "https://api.example.com/v1") {
 		t.Error("different messages produced the same key")
 	}
 }
@@ -153,7 +153,19 @@ func TestComputeKey_IgnoresStream(t *testing.T) {
 		Messages: []models.ClaudeMessage{{Role: "user", Content: "hello"}},
 		Stream:   &falseVal,
 	}
-	if ComputeKey(req1) != ComputeKey(req2) {
+	if ComputeKey(req1, "https://api.example.com/v1") != ComputeKey(req2, "https://api.example.com/v1") {
 		t.Error("Stream field should not affect the cache key")
+	}
+}
+
+func TestComputeKey_DifferentBaseURL(t *testing.T) {
+	req := models.ClaudeRequest{
+		Model:    "claude-sonnet-4-20250514",
+		Messages: []models.ClaudeMessage{{Role: "user", Content: "hello"}},
+	}
+	k1 := ComputeKey(req, "https://api.mammouth.ai/v1")
+	k2 := ComputeKey(req, "https://openrouter.ai/api/v1")
+	if k1 == k2 {
+		t.Error("same request with different baseURL should produce different cache keys")
 	}
 }
