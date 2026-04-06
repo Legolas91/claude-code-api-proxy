@@ -73,6 +73,87 @@ jobs:
 
           Get-ChildItem dist/ | Format-Table Name, Length
 
+      - name: Smoke test Windows binary
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          $binary = "dist/cc-api-proxy-windows-amd64.exe"
+          $pass = 0; $fail = 0
+
+          function Assert-Pass($label) { Write-Host "  PASS $label"; $script:pass++ }
+          function Assert-Fail($label, $detail) { Write-Host "  FAIL $label — $detail"; $script:fail++ }
+
+          # 1. version command
+          $out = & $binary version 2>&1
+          if ($LASTEXITCODE -eq 0 -and ($out -match [regex]::Escape($version))) {
+            Assert-Pass "version output contains tag"
+          } else {
+            Assert-Fail "version output contains tag" "got: $out"
+          }
+
+          # 2. help command
+          & $binary help 2>&1 | Out-Null
+          if ($LASTEXITCODE -eq 0) { Assert-Pass "help exit code 0" }
+          else { Assert-Fail "help exit code 0" "exit=$LASTEXITCODE" }
+
+          # 3-8. Start proxy and run HTTP checks
+          $env:HOST = "127.0.0.1"
+          $env:PORT = "18082"
+          $env:OPENAI_BASE_URL = "http://localhost:11111/v1"
+          $env:OPENAI_API_KEY = "smoke-test-fake-key"
+          $proc = Start-Process -FilePath $binary -ArgumentList "-s" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 2
+
+          try {
+            # 3. GET /health
+            try {
+              $h = Invoke-RestMethod "http://127.0.0.1:18082/health" -TimeoutSec 5
+              if ($h.status -eq "ok" -and ($h.version -eq $version -or $h.version -match "^v\d")) {
+                Assert-Pass "GET /health returns status=ok"
+              } else {
+                Assert-Fail "GET /health returns status=ok" "got: $($h | ConvertTo-Json -Compress)"
+              }
+            } catch { Assert-Fail "GET /health" "$_" }
+
+            # 4. GET / (info endpoint)
+            try {
+              $info = Invoke-RestMethod "http://127.0.0.1:18082/" -TimeoutSec 5
+              Assert-Pass "GET / responds"
+            } catch { Assert-Fail "GET / responds" "$_" }
+
+            # 5. POST /v1/messages — invalid JSON → 400
+            try {
+              Invoke-WebRequest "http://127.0.0.1:18082/v1/messages" -Method POST `
+                -Body "not-json" -ContentType "application/json" -TimeoutSec 5 `
+                -ErrorAction Stop | Out-Null
+              Assert-Fail "POST invalid JSON → 400" "expected 400, got 2xx"
+            } catch {
+              $code = $_.Exception.Response.StatusCode.value__
+              if ($code -eq 400) { Assert-Pass "POST invalid JSON → 400" }
+              else { Assert-Fail "POST invalid JSON → 400" "got HTTP $code" }
+            }
+
+            # 6. POST /v1/messages — missing model → 400
+            $noModel = '{"messages":[{"role":"user","content":"hi"}],"max_tokens":10}'
+            try {
+              Invoke-WebRequest "http://127.0.0.1:18082/v1/messages" -Method POST `
+                -Body $noModel -ContentType "application/json" -TimeoutSec 5 `
+                -ErrorAction Stop | Out-Null
+              Assert-Fail "POST missing model → 400" "expected 400, got 2xx"
+            } catch {
+              $code = $_.Exception.Response.StatusCode.value__
+              if ($code -eq 400) { Assert-Pass "POST missing model → 400" }
+              else { Assert-Fail "POST missing model → 400" "got HTTP $code" }
+            }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item env:HOST, env:PORT, env:OPENAI_BASE_URL, env:OPENAI_API_KEY -ErrorAction SilentlyContinue
+          }
+
+          Write-Host ""
+          Write-Host "Smoke tests: $pass passed, $fail failed"
+          if ($fail -gt 0) { throw "Smoke tests FAILED ($fail failures)" }
+
       - name: Zip binaries
         shell: pwsh
         run: |
@@ -205,3 +286,214 @@ jobs:
             }
             Write-Host "All assets uploaded."
           }
+
+      - name: NRT — integration tests
+        shell: pwsh
+        run: |
+          # Skip if no API key configured
+          if (-not "${{ secrets.GROQ_API_KEY }}") {
+            Write-Host "WARNING: GROQ_API_KEY secret not set — skipping NRT."
+            exit 0
+          }
+
+          $version = $env:VERSION
+          $binary = "dist/cc-api-proxy-windows-amd64.exe"
+
+          # Unzip the Windows binary (was zipped in previous step)
+          $zipFile = Get-ChildItem "dist/*windows-amd64*${version}.zip" | Select-Object -First 1
+          if (-not $zipFile) { throw "Windows binary zip not found in dist/" }
+          $tempDir = New-Item -ItemType Directory -Path "nrt-bin" -Force
+          Expand-Archive -Path $zipFile.FullName -DestinationPath $tempDir.FullName
+          $binary = (Get-ChildItem "$($tempDir.FullName)/*.exe" | Select-Object -First 1).FullName
+          if (-not $binary) { throw "No .exe found after unzip" }
+
+          # Start proxy with Groq free tier — 3 different models per tier
+          $env:HOST = "127.0.0.1"
+          $env:PORT = "18082"
+          $env:OPENAI_BASE_URL = "https://api.groq.com/openai/v1"
+          $env:OPENAI_API_KEY = "${{ secrets.GROQ_API_KEY }}"
+          $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = "llama-3.1-8b-instant"
+          $env:ANTHROPIC_DEFAULT_SONNET_MODEL = "llama-3.3-70b-versatile"
+          $env:ANTHROPIC_DEFAULT_OPUS_MODEL = "llama-3.3-70b-versatile"
+          $env:PROXY_CACHE_ENABLED = "true"
+          $env:PROXY_MAX_IDENTICAL_RETRIES = "3"
+
+          $proc = Start-Process -FilePath $binary -ArgumentList "-s" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 2
+
+          $pass = 0; $fail = 0
+          $base = "http://127.0.0.1:18082"
+
+          function Assert-Pass($label) { Write-Host "  PASS $label"; $script:pass++ }
+          function Assert-Fail($label, $detail) { Write-Host "  FAIL $label — $detail"; $script:fail++ }
+
+          function Invoke-Message($model, $content, $extraBody = @{}) {
+            $body = @{
+              model = $model
+              max_tokens = 64
+              messages = @(@{ role = "user"; content = $content })
+            } + $extraBody
+            Invoke-RestMethod "$base/v1/messages" -Method POST `
+              -Body ($body | ConvertTo-Json -Depth 10 -Compress) `
+              -ContentType "application/json" -TimeoutSec 30
+          }
+
+          try {
+            # 1. Haiku tier
+            try {
+              $r = Invoke-Message "claude-haiku-4-5" "Say OK"
+              if ($r.content) { Assert-Pass "Haiku (llama-3.1-8b-instant) responds" }
+              else { Assert-Fail "Haiku responds" "no content in response" }
+            } catch { Assert-Fail "Haiku responds" "$_" }
+
+            # 2. Sonnet tier
+            try {
+              $r = Invoke-Message "claude-sonnet-4-5" "Say OK"
+              if ($r.content) { Assert-Pass "Sonnet (llama-4-scout-17b) responds" }
+              else { Assert-Fail "Sonnet responds" "no content in response" }
+            } catch { Assert-Fail "Sonnet responds" "$_" }
+
+            # 3. Opus tier
+            try {
+              $r = Invoke-Message "claude-opus-4-5" "Say OK"
+              if ($r.content) { Assert-Pass "Opus (llama-3.3-70b) responds" }
+              else { Assert-Fail "Opus responds" "no content in response" }
+            } catch { Assert-Fail "Opus responds" "$_" }
+
+            # 4. Tool use
+            try {
+              $tools = @(@{
+                name = "get_weather"
+                description = "Get the weather"
+                input_schema = @{ type = "object"; properties = @{ location = @{ type = "string" } }; required = @("location") }
+              })
+              $r = Invoke-Message "claude-opus-4-5" "What is the weather in Paris?" @{ tools = $tools }
+              $hasContent = $r.content -and $r.content.Count -gt 0
+              if ($hasContent) { Assert-Pass "Tool use — response has content" }
+              else { Assert-Fail "Tool use" "no content: $($r | ConvertTo-Json -Compress)" }
+            } catch { Assert-Fail "Tool use" "$_" }
+
+            # 5. Streaming SSE
+            try {
+              $body = @{
+                model = "claude-haiku-4-5"
+                max_tokens = 32
+                stream = $true
+                messages = @(@{ role = "user"; content = "Say hi" })
+              } | ConvertTo-Json -Depth 10 -Compress
+
+              $req = [System.Net.WebRequest]::Create("$base/v1/messages")
+              $req.Method = "POST"
+              $req.ContentType = "application/json"
+              $req.Timeout = 30000
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+              $req.ContentLength = $bytes.Length
+              $stream = $req.GetRequestStream()
+              $stream.Write($bytes, 0, $bytes.Length)
+              $stream.Close()
+
+              $resp = $req.GetResponse()
+              $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+              $chunk = ""
+              $found = $false
+              $timeout = [System.Diagnostics.Stopwatch]::StartNew()
+              while (-not $reader.EndOfStream -and $timeout.Elapsed.TotalSeconds -lt 15) {
+                $line = $reader.ReadLine()
+                if ($line -match "message_start|content_block") { $found = $true; break }
+              }
+              $reader.Close(); $resp.Close()
+              if ($found) { Assert-Pass "Streaming SSE contains expected events" }
+              else { Assert-Fail "Streaming SSE" "no message_start/content_block event" }
+            } catch { Assert-Fail "Streaming SSE" "$_" }
+
+            # 6. Retry loop detection — inject identical tool_use history
+            try {
+              $toolCall = @{ type = "tool_use"; id = "t1"; name = "bash"; input = @{ command = "ls" } }
+              $toolResult = @{ type = "tool_result"; tool_use_id = "t1"; content = "error" }
+              $msgs = @(
+                @{ role = "user"; content = "run ls" }
+                @{ role = "assistant"; content = @($toolCall) }
+                @{ role = "user"; content = @($toolResult) }
+                @{ role = "assistant"; content = @($toolCall) }
+                @{ role = "user"; content = @($toolResult) }
+                @{ role = "assistant"; content = @($toolCall) }
+                @{ role = "user"; content = @($toolResult) }
+                @{ role = "user"; content = "continue" }
+              )
+              $body = @{
+                model = "claude-haiku-4-5"; max_tokens = 64; messages = $msgs
+              } | ConvertTo-Json -Depth 10 -Compress
+              $r = Invoke-RestMethod "$base/v1/messages" -Method POST `
+                -Body $body -ContentType "application/json" -TimeoutSec 30
+              if ($r.content) { Assert-Pass "Retry loop detection — proxy responds (nudge injected)" }
+              else { Assert-Fail "Retry loop detection" "no content" }
+            } catch { Assert-Fail "Retry loop detection" "$_" }
+
+            # 7. Response cache — second identical request returns X-Cache: HIT
+            try {
+              $cacheBody = @{
+                model = "claude-haiku-4-5"; max_tokens = 16
+                messages = @(@{ role = "user"; content = "cache test nrt 42" })
+              } | ConvertTo-Json -Depth 10 -Compress
+
+              # First request (MISS)
+              Invoke-RestMethod "$base/v1/messages" -Method POST `
+                -Body $cacheBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
+
+              # Second request (should HIT)
+              $resp2 = Invoke-WebRequest "$base/v1/messages" -Method POST `
+                -Body $cacheBody -ContentType "application/json" -TimeoutSec 30
+              $cacheHeader = $resp2.Headers["X-Cache"]
+              if ($cacheHeader -eq "HIT") { Assert-Pass "Response cache returns X-Cache: HIT" }
+              else { Assert-Fail "Response cache" "X-Cache=$cacheHeader (expected HIT)" }
+            } catch { Assert-Fail "Response cache" "$_" }
+
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item env:HOST, env:PORT, env:OPENAI_BASE_URL, env:OPENAI_API_KEY `
+              -ErrorAction SilentlyContinue
+            Remove-Item env:ANTHROPIC_DEFAULT_HAIKU_MODEL, env:ANTHROPIC_DEFAULT_SONNET_MODEL, `
+              env:ANTHROPIC_DEFAULT_OPUS_MODEL, env:PROXY_CACHE_ENABLED, `
+              env:PROXY_MAX_IDENTICAL_RETRIES -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force "nrt-bin" -ErrorAction SilentlyContinue
+
+            # Notify via Gotify if NRT failed
+            if ($script:fail -gt 0 -and "${{ secrets.GOTIFY_TOKEN }}") {
+              $body = @{
+                title    = "NRT Failed — $version"
+                message  = "NRT: $($script:fail)/7 tests failed. Check Gitea Actions."
+                priority = 7
+              } | ConvertTo-Json -Compress
+              try {
+                Invoke-RestMethod "http://localhost:8587/message?token=${{ secrets.GOTIFY_TOKEN }}" `
+                  -Method POST -ContentType "application/json" -Body $body -TimeoutSec 5
+                Write-Host "Gotify notification sent."
+              } catch {
+                Write-Host "WARNING: Gotify notification failed (non-blocking): $_"
+              }
+            }
+
+            # Send email if NRT failed
+            if ($script:fail -gt 0 -and "${{ secrets.SMTP_USER }}" -and "${{ secrets.SMTP_PASS }}") {
+              try {
+                $cred = New-Object PSCredential(
+                  "${{ secrets.SMTP_USER }}",
+                  (ConvertTo-SecureString "${{ secrets.SMTP_PASS }}" -AsPlainText -Force)
+                )
+                Send-MailMessage `
+                  -SmtpServer "smtp.gmail.com" -Port 587 -UseSsl `
+                  -From "${{ secrets.SMTP_USER }}" `
+                  -To "${{ secrets.SMTP_TO }}" `
+                  -Subject "NRT Failed — $version" `
+                  -Body "NRT: $($script:fail)/7 tests failed.`n`nCheck Gitea Actions for details." `
+                  -Credential $cred
+                Write-Host "Email notification sent."
+              } catch {
+                Write-Host "WARNING: Email notification failed (non-blocking): $_"
+              }
+            }
+          }
+
+          Write-Host ""
+          Write-Host "NRT results: $pass passed, $fail failed"
+          if ($fail -gt 0) { exit 1 }
