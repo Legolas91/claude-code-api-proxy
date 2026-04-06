@@ -129,32 +129,79 @@ jobs:
             Accept = "application/json"
           }
 
-          # Create release
+          # Create or update release (idempotent — safe for re-runs)
           $body = @{
             tag_name = $version
             name = $version
             body = $notes
           } | ConvertTo-Json -Compress
 
-          Write-Host "Creating release $version..."
-          $release = Invoke-RestMethod `
-            -Uri "$serverUrl/api/v1/repos/$repo/releases" `
-            -Method Post -Headers $headers `
-            -Body $body -ContentType "application/json" `
-            -SkipCertificateCheck
+          $currentSha = (git rev-parse HEAD 2>$null)
+          $needUpload = $true
 
-          $releaseId = $release.id
-          Write-Host "Release created: id=$releaseId"
-
-          # Upload assets
-          foreach ($file in Get-ChildItem -Path "dist/*") {
-            Write-Host "Uploading $($file.Name)..."
-            $uri = "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets?name=$($file.Name)"
-            Invoke-RestMethod `
-              -Uri $uri -Method Post -Headers $headers `
-              -InFile $file.FullName `
-              -ContentType "application/octet-stream" `
+          try {
+            $existing = Invoke-RestMethod `
+              -Uri "$serverUrl/api/v1/repos/$repo/releases/tags/$version" `
+              -Method Get -Headers $headers `
               -SkipCertificateCheck
+            $releaseId = $existing.id
+            $releaseSha = $existing.target_commitish
+            Write-Host "Release $version already exists (id=$releaseId, sha=$releaseSha)"
+
+            # Update release notes
+            Invoke-RestMethod `
+              -Uri "$serverUrl/api/v1/repos/$repo/releases/$releaseId" `
+              -Method Patch -Headers $headers `
+              -Body $body -ContentType "application/json" `
+              -SkipCertificateCheck | Out-Null
+
+            if ($releaseSha -eq $currentSha) {
+              # Same commit — check if assets already exist
+              $assets = Invoke-RestMethod `
+                -Uri "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets" `
+                -Method Get -Headers $headers `
+                -SkipCertificateCheck
+              if ($assets.Count -gt 0) {
+                Write-Host "Assets already up-to-date ($($assets.Count) files), skipping upload."
+                $needUpload = $false
+              }
+            } else {
+              # Tag moved — delete stale assets built from old commit
+              Write-Host "Tag moved ($releaseSha -> $currentSha), replacing assets..."
+              $assets = Invoke-RestMethod `
+                -Uri "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets" `
+                -Method Get -Headers $headers `
+                -SkipCertificateCheck
+              foreach ($asset in $assets) {
+                Write-Host "  Deleting stale: $($asset.name)"
+                Invoke-RestMethod `
+                  -Uri "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets/$($asset.id)" `
+                  -Method Delete -Headers $headers `
+                  -SkipCertificateCheck
+              }
+            }
+            Write-Host "Release updated: id=$releaseId"
+          } catch {
+            Write-Host "Creating release $version..."
+            $release = Invoke-RestMethod `
+              -Uri "$serverUrl/api/v1/repos/$repo/releases" `
+              -Method Post -Headers $headers `
+              -Body $body -ContentType "application/json" `
+              -SkipCertificateCheck
+            $releaseId = $release.id
+            Write-Host "Release created: id=$releaseId"
           }
 
-          Write-Host "All assets uploaded."
+          # Upload assets (skip if already up-to-date)
+          if ($needUpload) {
+            foreach ($file in Get-ChildItem -Path "dist/*") {
+              Write-Host "Uploading $($file.Name)..."
+              $uri = "$serverUrl/api/v1/repos/$repo/releases/$releaseId/assets?name=$($file.Name)"
+              Invoke-RestMethod `
+                -Uri $uri -Method Post -Headers $headers `
+                -InFile $file.FullName `
+                -ContentType "application/octet-stream" `
+                -SkipCertificateCheck
+            }
+            Write-Host "All assets uploaded."
+          }
