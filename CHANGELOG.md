@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.23] - 2026-04-06
+
+### Added
+- **Smoke tests in release workflow** — 6 checks on the Windows binary before packaging (version, help, `/health`, `/`, invalid JSON → 400, missing model → 400); blocking — no release if smoke fails
+- **NRT (Non-Regression Tests) in release workflow** — 7 integration tests via Groq free tier after release (Haiku=`llama-3.1-8b-instant`, Sonnet/Opus=`llama-3.3-70b-versatile`): 3-tier responses, tool use, streaming SSE, retry loop detection, response cache; non-blocking for release
+- **Gotify push notification on NRT failure** — self-hosted Gotify server (`localhost:8587`), secret `GOTIFY_TOKEN`; non-blocking
+- **Gmail email notification on NRT failure** — `smtp.gmail.com:587` with app password, secrets `SMTP_USER`/`SMTP_PASS`/`SMTP_TO`; non-blocking
+
+### Changed
+- **Release workflow idempotent** — PATCH release notes if tag already exists; skip asset upload if same commit; delete stale assets if tag moved
+
 ## [1.5.21] - 2026-04-04
 
 ### Fixed
