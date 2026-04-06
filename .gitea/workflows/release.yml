@@ -349,7 +349,7 @@ jobs:
             # 2. Sonnet tier
             try {
               $r = Invoke-Message "claude-sonnet-4-5" "Say OK"
-              if ($r.content) { Assert-Pass "Sonnet (llama-4-scout-17b) responds" }
+              if ($r.content) { Assert-Pass "Sonnet (llama-3.3-70b-versatile) responds" }
               else { Assert-Fail "Sonnet responds" "no content in response" }
             } catch { Assert-Fail "Sonnet responds" "$_" }
 
