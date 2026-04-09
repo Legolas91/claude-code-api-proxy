@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.24] - 2026-04-09
+
+### Changed
+- **Go toolchain upgraded to 1.26.2** — `go.mod` updated from 1.26.1 to 1.26.2
+
 ## [1.5.23] - 2026-04-06
 
 ### Added
