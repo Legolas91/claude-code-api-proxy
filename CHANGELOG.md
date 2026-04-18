@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.25] - 2026-04-18
+
+### Security
+- **Sanitize provider error messages** — provider errors no longer expose backend URL or internal details to clients; full error logged server-side only (`handlers.go`)
+- **Global Fiber timeouts** — `ReadTimeout: 30s`, `WriteTimeout: 600s`, `IdleTimeout: 120s`, `BodyLimit: 10MB` added to Fiber config (`server.go`)
+- **PID file race condition (TOCTOU)** — `writePID()` now uses `O_EXCL` flag to prevent symlink attacks and double-start race conditions (`daemon.go`)
+- **Root endpoint config leak** — removed `openai_base_url` and model names from `GET /` response; routing mode retained (`server.go`)
+- **Log rotation** — stdout/stderr redirected through `lumberjack` (10MB, 3 backups, 7 days, gzip); prevents unbounded log growth at `/tmp/cc-api-proxy.log`
+- **Gosec static analysis in CI** — `gosec -exclude-generated ./...` added as CI step after `govulncheck` (`ci.yml`)
+
 ## [1.5.24] - 2026-04-09
 
 ### Changed

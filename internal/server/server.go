@@ -20,7 +20,6 @@ import (
 
 	"github.com/claude-code-proxy/proxy/internal/cache"
 	"github.com/claude-code-proxy/proxy/internal/config"
-	"github.com/claude-code-proxy/proxy/internal/converter"
 	"github.com/claude-code-proxy/proxy/internal/daemon"
 	"github.com/claude-code-proxy/proxy/internal/version"
 	"github.com/gofiber/fiber/v2"
@@ -44,7 +43,7 @@ func detectClaudeCodeVersion() string {
 	// Strategy 2: npm package.json
 	if npmRoot, err := exec.Command("npm", "root", "-g").Output(); err == nil {
 		pkgPath := strings.TrimSpace(string(npmRoot)) + "/@anthropic-ai/claude-code/package.json"
-		if data, err := os.ReadFile(pkgPath); err == nil {
+		if data, err := os.ReadFile(pkgPath); err == nil { // #nosec G304 -- path built from npm root output, not user input
 			var pkg struct {
 				Version string `json:"version"`
 			}
@@ -76,6 +75,10 @@ func Start(cfg *config.Config) error {
 		DisableStartupMessage: true,
 		ServerHeader:          "Claude-Code-Proxy",
 		AppName:               "Claude Code Proxy v" + version.Version,
+		ReadTimeout:           30 * time.Second,
+		WriteTimeout:          600 * time.Second, // long for streaming responses
+		IdleTimeout:           120 * time.Second,
+		BodyLimit:             10 * 1024 * 1024, // 10MB — enforced at Fiber level
 	})
 
 	// Middleware
@@ -166,20 +169,14 @@ func Start(cfg *config.Config) error {
 		return c.JSON(resp)
 	})
 
-	// Root endpoint - proxy info
+	// Root endpoint - proxy info (no provider config exposed)
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"message": "Claude Code Proxy",
-			"version": version.Version,
-			"commit":  version.Commit,
-			"status":  "running",
-			"config": fiber.Map{
-				"openai_base_url": cfg.OpenAIBaseURL,
-				"routing_mode":    getRoutingMode(cfg),
-				"opus_model":      getOpusModel(cfg),
-				"sonnet_model":    getSonnetModel(cfg),
-				"haiku_model":     getHaikuModel(cfg),
-			},
+		return c.JSON(fiber.Map{ // #nosec G101 -- no credentials, gosec false positive on endpoint path strings
+			"message":      "Claude Code Proxy",
+			"version":      version.Version,
+			"commit":       version.Commit,
+			"status":       "running",
+			"routing_mode": getRoutingMode(cfg),
 			"endpoints": fiber.Map{
 				"health":       "/health",
 				"messages":     "/v1/messages",
@@ -241,27 +238,6 @@ func getRoutingMode(cfg *config.Config) string {
 		return "custom (env overrides)"
 	}
 	return "pattern-based"
-}
-
-func getOpusModel(cfg *config.Config) string {
-	if cfg.OpusModel != "" {
-		return cfg.OpusModel
-	}
-	return converter.DefaultOpusModel + " (pattern-based)"
-}
-
-func getSonnetModel(cfg *config.Config) string {
-	if cfg.SonnetModel != "" {
-		return cfg.SonnetModel
-	}
-	return "version-aware (pattern-based)"
-}
-
-func getHaikuModel(cfg *config.Config) string {
-	if cfg.HaikuModel != "" {
-		return cfg.HaikuModel
-	}
-	return converter.DefaultHaikuModel + " (pattern-based)"
 }
 
 // limitBodySize returns a middleware that enforces a maximum request body size.

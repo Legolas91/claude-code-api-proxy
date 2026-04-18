@@ -56,6 +56,30 @@ func redactSensitiveData(body []byte) string {
 	return string(redacted)
 }
 
+// sanitizeProviderError returns a generic error message for a given HTTP status code.
+// Prevents leaking backend URL, internal details, or provider-specific error messages to clients.
+func sanitizeProviderError(statusCode int) string {
+	switch statusCode {
+	case 401, 403:
+		return "Authentication failed with the backend provider"
+	case 429:
+		return "Rate limit exceeded. Please try again later."
+	case 400:
+		return "The backend provider rejected the request"
+	case 404:
+		return "Backend endpoint not found"
+	case 413:
+		return "Request too large for the backend provider"
+	case 500, 502, 503, 504:
+		return "Backend provider is temporarily unavailable"
+	default:
+		if statusCode >= 400 && statusCode < 500 {
+			return "Backend provider returned a client error"
+		}
+		return "Backend provider returned an error"
+	}
+}
+
 // addOpenRouterHeaders adds OpenRouter-specific HTTP headers for better rate limits.
 // Sets HTTP-Referer and X-Title headers when configured, which helps with OpenRouter's
 // rate limiting and usage tracking.
@@ -87,7 +111,7 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config, responseCache cache.Store)
 			"type": "error",
 			"error": fiber.Map{
 				"type":    "invalid_request_error",
-				"message": fmt.Sprintf("Invalid request body: %v", err),
+				"message": "Invalid request body: malformed JSON",
 			},
 		})
 	}
@@ -269,11 +293,12 @@ func handleMessages(c *fiber.Ctx, cfg *config.Config, responseCache cache.Store)
 				errorType = "invalid_request_error"
 			}
 		}
+		fmt.Printf("[ERROR] Provider error (status %d): %v\n", statusCode, err)
 		return c.Status(statusCode).JSON(fiber.Map{
 			"type": "error",
 			"error": fiber.Map{
 				"type":    errorType,
-				"message": fmt.Sprintf("OpenAI API error: %v", err),
+				"message": sanitizeProviderError(statusCode),
 			},
 		})
 	}

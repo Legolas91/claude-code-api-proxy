@@ -287,6 +287,69 @@ jobs:
             Write-Host "All assets uploaded."
           }
 
+      - name: Mirror release to GitHub
+        shell: pwsh
+        run: |
+          if (-not "${{ secrets.GH_TOKEN }}") {
+            Write-Host "WARNING: GH_TOKEN secret not set — skipping GitHub mirror."
+            exit 0
+          }
+
+          $version = $env:VERSION
+          $ghRepo = "Legolas91/claude-code-api-proxy"
+          $notes = Get-Content -Path "release-notes.txt" -Raw
+
+          $headers = @{
+            Authorization = "Bearer ${{ secrets.GH_TOKEN }}"
+            Accept        = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+
+          # Create or update GitHub release (idempotent)
+          $releaseId = $null
+          try {
+            $existing = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$ghRepo/releases/tags/$version" `
+              -Headers $headers
+            $releaseId = $existing.id
+            Write-Host "GitHub release $version already exists (id=$releaseId) — updating notes..."
+            Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$ghRepo/releases/$releaseId" `
+              -Method Patch -Headers $headers `
+              -Body (@{ body = $notes } | ConvertTo-Json -Compress) `
+              -ContentType "application/json" | Out-Null
+          } catch {
+            Write-Host "Creating GitHub release $version..."
+            $body = @{ tag_name = $version; name = $version; body = $notes } | ConvertTo-Json -Compress
+            $release = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$ghRepo/releases" `
+              -Method Post -Headers $headers `
+              -Body $body -ContentType "application/json"
+            $releaseId = $release.id
+            Write-Host "GitHub release created: id=$releaseId"
+          }
+
+          # Delete existing assets (clean slate on re-run)
+          $existing_assets = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$ghRepo/releases/$releaseId/assets" `
+            -Headers $headers
+          foreach ($asset in $existing_assets) {
+            Write-Host "  Deleting existing asset: $($asset.name)"
+            Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$ghRepo/releases/assets/$($asset.id)" `
+              -Method Delete -Headers $headers | Out-Null
+          }
+
+          # Upload all assets
+          foreach ($file in Get-ChildItem -Path "dist/*") {
+            Write-Host "Uploading $($file.Name) to GitHub..."
+            $uploadUrl = "https://uploads.github.com/repos/$ghRepo/releases/$releaseId/assets?name=$([System.Uri]::EscapeDataString($file.Name))"
+            Invoke-RestMethod `
+              -Uri $uploadUrl -Method Post -Headers $headers `
+              -InFile $file.FullName -ContentType "application/octet-stream" | Out-Null
+          }
+          Write-Host "GitHub release mirrored: https://github.com/$ghRepo/releases/tag/$version"
+
       - name: NRT — integration tests
         shell: pwsh
         run: |

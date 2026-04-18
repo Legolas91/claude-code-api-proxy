@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/joho/godotenv v1.5.1
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (

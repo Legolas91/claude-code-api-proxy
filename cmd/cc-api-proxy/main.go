@@ -78,6 +78,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Redirect stdout/stderr through rotating log file
+	daemon.SetupLogging()
+
 	// Start HTTP server (blocks)
 	// Note: No need to pre-fetch reasoning models - adaptive per-model detection
 	// handles all models automatically through retry mechanism

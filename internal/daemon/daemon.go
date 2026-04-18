@@ -95,7 +95,21 @@ func Status() {
 
 func writePID() error {
 	pid := os.Getpid()
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0600)
+	// O_EXCL prevents TOCTOU race: fails if file already exists
+	f, err := os.OpenFile(pidFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600) // #nosec G304
+	if err != nil {
+		if os.IsExist(err) {
+			if isProcessRunning() {
+				return fmt.Errorf("proxy already running")
+			}
+			cleanupPID()
+			return writePID()
+		}
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+	_, err = f.WriteString(strconv.Itoa(pid))
+	_ = f.Close()
+	return err
 }
 
 func readPID() (int, error) {

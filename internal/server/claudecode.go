@@ -44,6 +44,7 @@ func handleClaudeCodeMessages(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg 
 func handleClaudeCodeNonStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg *config.Config, args []string, prompt string, cacheKey string, responseCache cache.Store) error {
 	startTime := time.Now()
 
+	// #nosec G204 -- args are proxy-controlled, not user input
 	cmd := exec.Command("claude", args...) //nolint:gosec
 	cmd.Env = claudeCodeEnv()
 	cmd.Stdin = strings.NewReader(prompt)
@@ -173,7 +174,8 @@ func handleClaudeCodeStreaming(c *fiber.Ctx, claudeReq models.ClaudeRequest, cfg
 		})
 		_ = w.Flush()
 
-		cmd := exec.Command("claude", args...) //nolint:gosec
+		// #nosec G204 -- args are proxy-controlled, not user input
+	cmd := exec.Command("claude", args...) //nolint:gosec
 		cmd.Env = claudeCodeEnv()
 		cmd.Stdin = strings.NewReader(prompt)
 		stdout, err := cmd.StdoutPipe()

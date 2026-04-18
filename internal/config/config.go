@@ -132,9 +132,9 @@ func Load() (*Config, error) {
 	}
 
 	for _, loc := range locations {
-		if _, err := os.Stat(loc); err == nil {
+		if _, err := os.Stat(loc); err == nil { // #nosec G703 -- path from hardcoded list, not user input
 			// File exists, load it (overload to override existing env vars)
-			if err := godotenv.Overload(loc); err == nil {
+			if err := godotenv.Overload(loc); err == nil { // #nosec G703
 				fmt.Printf("📁 Loaded config from: %s\n", loc)
 				break
 			}

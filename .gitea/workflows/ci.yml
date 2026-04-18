@@ -65,3 +65,10 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           $gopath = (go env GOPATH)
           & "$gopath/bin/govulncheck.exe" ./...
+
+      - name: Security scan (gosec)
+        shell: pwsh
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          $gopath = (go env GOPATH)
+          & "$gopath/bin/gosec.exe" -exclude-generated -exclude=G101 ./...
